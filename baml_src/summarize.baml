@@ -18,7 +18,8 @@ class Summary {
 function SummarizeContent(content: string, contentType: ContentType, context: string?) -> Summary {
   // Specifies the client to use for the LLM call. Assumes an 'openai' client is configured in BAML settings.
   // The model used (e.g., gpt-4-turbo-preview) is typically configured in the BAML client settings or passed via environment variables.
-  client Gemini2_5_flash // Example client name - adjust based on your BAML configuration
+  // client Gemini2_5_flash 
+  client DeepSeekV3
 
   // Prompt definition using BAML's syntax
   prompt #"

@@ -108,12 +108,12 @@ def summarize_content(state: AgentState) -> AgentState:
         points = getattr(summary_result, 'key_points', [])
         summary = getattr(summary_result, 'concise_summary', 'Summarization service returned an unexpected response format.')
 
-        formatted_summary = f"<b>{title}</b>\n\n"
-        formatted_summary += "<b>Key Points:</b>\n"
+        formatted_summary = f"# {title}\n\n"
+        formatted_summary += "## Key Points:\n"
         for point in points:
             # Basic cleanup: strip whitespace from each point
             formatted_summary += f"- {point.strip()}\n"
-        formatted_summary += f"\n<b>Summary:</b>\n{summary.strip()}"
+        formatted_summary += f"\n## Summary:\n{summary.strip()}"
         # Clean up potential multiple newlines or leading/trailing whitespace in the final string
         formatted_summary = re.sub(r'\n\s*\n', '\n\n', formatted_summary).strip()
 

@@ -51,6 +51,24 @@ client<llm> Gemini2_5_pro {
   }
 }
 
+client<llm> DeepSeekR1 {
+  provider "openai"
+  options {
+    api_key env.DEEPSEEK_API_KEY
+    base_url "https://api.deepseek.com"
+    model "deepseek-reasoner"
+  }
+}
+
+client<llm> DeepSeekV3 {
+  provider "openai"
+  options {
+    api_key env.DEEPSEEK_API_KEY
+    base_url "https://api.deepseek.com"
+    model "deepseek-chat"
+    temperature 0.1
+  }
+}
 
 // https://docs.boundaryml.com/docs/snippets/clients/round-robin
 client<llm> CustomFast {

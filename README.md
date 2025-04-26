@@ -31,47 +31,42 @@ An agentic Telegram bot designed to summarize web links (articles, papers, etc.)
     cd telegram_link_summarizer_agent
     ```
 
-2.  **Set up Python Environment:**
-    *   Ensure you have Python 3.11 or higher.
-    *   (Optional, Recommended) Create and activate a virtual environment:
+2.  **Install Dependencies (using [`uv`](https://github.com/astral-sh/uv))**
+    *   You can use [`uv`](https://github.com/astral-sh/uv) to install dependencies:
         ```bash
-        python -m venv .venv
-        source .venv/bin/activate # On Windows use `.venv\Scripts\activate`
+        uv sync
         ```
 
-3.  **Install Dependencies:**
-    *   Using `uv` (recommended, if installed):
-        ```bash
-        uv pip install -r requirements.txt # Or potentially 'uv pip install .' if pyproject is fully configured
-        ```
-    *   Using `pip`:
-        ```bash
-        pip install -r requirements.txt # Or 'pip install .'
-        ```
-    *(Note: Verify the exact command based on `pyproject.toml` setup; `requirements.txt` might not be the primary source if using `uv` or modern `pip` with `pyproject.toml`)*
-
-4.  **Configure Environment Variables:**
-    *   Copy the example environment file (if one exists, e.g., `.env.example`) or create a `.env` file:
-        ```bash
-        cp .env.example .env # Or create .env manually
-        ```
+3.  **Configure Environment Variables:**
+    *   Create a `.env` file in the root directory and put your credentials there.   
     *   Fill in the required API keys and tokens in your `.env` file:
         *   `TELEGRAM_BOT_TOKEN`: Your Telegram Bot token from BotFather.
         *   `TAVILY_API_KEY`: Your Tavily Search API key.
-        *   `BOUNDARY_API_KEY` or `OPENAI_API_KEY`: API key for the LLM used by BAML/LangChain.
+        *   `GEMINI_API_KEY`: API key for the LLM used by BAML.
         *   *(Add any other keys required by `config.py`)*
 
 ## ▶️ Usage
 
-1.  **Run the BAML Language Server (if required by your BAML setup):**
-    *   Check BAML documentation for how to run its server component if needed.
+1.  **(Optional) Run the Agent Script Directly (for testing):**
+    *   You can test the core agent logic by running `agent.py`. Modify the example URL within the script if needed.
+    ```bash
+    python agent.py
+    ```
 
-2.  **Start the Telegram Bot:**
+2.  **(Optional) Deploy to LangGraph Studio:**
+    *   If you have the LangGraph CLI installed (`pip install langgraph-cli`), you can deploy your agent graph for monitoring and debugging:
+    ```bash
+    langgraph deploy
+    ```
+    *   Follow the CLI prompts to name your deployment.
+
+3.  **Start the Telegram Bot (Primary Usage):**
+    *   **Note:** This interface is currently untested.
     ```bash
     python bot.py
     ```
 
-3.  **Interact with the Bot:**
+4.  **Interact with the Bot:**
     *   Open Telegram and find the bot you created.
     *   Send a message containing a URL (e.g., `https://example.com/article`).
     *   The bot will process the link and reply with a summary.
@@ -81,11 +76,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, etc.)
 The `agent_viz.py` script can be used to generate a visualization of the LangGraph agent (like the image at the top). Run it if needed:
 
 ```bash
-python agent_viz.py
+marimo edit agent_viz.py
 ```
 
-This will likely save or display the graph.
-
-## 📄 License
-
-(Specify your license here, e.g., MIT License)
+This will open marimo and you can run and visualize the agent graph flow.
