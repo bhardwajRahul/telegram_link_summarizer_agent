@@ -155,6 +155,7 @@ def build_graph():
     app = workflow.compile()
     return app
 
+
 graph = build_graph()
 
 # --- Main Agent Function --- 
@@ -165,8 +166,7 @@ def run_agent(url: str) -> str:
     initial_state = {"original_message": original_message, "url": url}
     try:
         # Or just invoke and get the final state
-        app = build_graph()
-        final_state = app.invoke(initial_state)
+        final_state = graph.invoke(initial_state)
 
         console.print("--- Agent Finished ---", style="bold blue")
         if final_state.get('error'):

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import logging
 
 # Load environment variables from.env file
-load_dotenv()
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 

@@ -3,13 +3,18 @@
 import logging
 import re
 import html # For escaping HTML in messages
+import os
+from dotenv import load_dotenv
+
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 
-# Import the agent runner and config
+# Import the agent runner
 from agent import run_agent
-from config import TELEGRAM_BOT_TOKEN
+
+# Load environment variables from .env file
+load_dotenv(override=True)
 
 # --- Logging Setup ---
 logging.basicConfig(
@@ -26,7 +31,7 @@ URL_REGEX = r'https?://\S+'
 # --- Message Handler ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles incoming text messages, extracts URLs, and triggers the summarizer agent."""
-    message = update.message
+    message = update.effective_message
     chat_id = message.chat_id
     text = message.text
 
@@ -51,7 +56,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         # Use asyncio.create_task to run the agent concurrently if needed,
         # but for now, let's run it directly and wait.
-        summary_or_error = await run_agent(text) # Pass the full message text
+        summary_or_error = run_agent(text) # Pass the full message text
 
         # Escape HTML characters in the result to prevent formatting issues
         escaped_result = html.escape(summary_or_error)
@@ -68,13 +73,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # --- Main Function ---
 def main() -> None:
     """Starts the Telegram bot."""
-    if not TELEGRAM_BOT_TOKEN:
-        logger.critical("TELEGRAM_BOT_TOKEN environment variable not set. Bot cannot start.")
+    # Get token from environment variable
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+
+    # --- Debugging --- 
+    print(f"DEBUG: Attempting to use token: '{bot_token}'") 
+    # --- End Debugging ---
+
+    if not bot_token:
+        logger.critical("TELEGRAM_BOT_TOKEN environment variable not set (or .env file missing/incorrect). Bot cannot start.")
         return
 
     logger.info("Starting Telegram bot...")
 
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application = Application.builder().token(bot_token).build()
 
     # Register the handler for text messages in private chats and groups/supergroups
     # Using filters.TEXT & (~filters.COMMAND) to avoid capturing commands
