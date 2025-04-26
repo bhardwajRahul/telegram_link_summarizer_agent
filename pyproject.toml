@@ -1,0 +1,21 @@
+[project]
+name = "telegram-link-summarizer-agent"
+version = "0.1.0"
+description = "An agentic Telegram bot to summarize links and papers."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "baml-py>=0.85.0",
+    "langgraph>=0.0.57",
+    "langchain>=0.2.0",
+    "langchain-openai>=0.1.7", # Assuming OpenAI, change if needed
+    "python-telegram-bot[ext]>=21.0", # Added [ext] for extensions
+    "firecrawl-py>=0.0.18",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.3",
+    "pypdf>=4.2.0",
+    "python-dotenv>=1.0.1",
+    "tavily-python>=0.3.3", # Adding Tavily as it's in config
+    # Add any other specific langchain community/experimental packages if used
+    "langgraph-checkpoint-sqlite>=2.0.6",
+]
