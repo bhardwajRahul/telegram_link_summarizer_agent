@@ -1,0 +1,29 @@
+# Git files
+.git
+.gitignore
+
+# Python virtual environment
+.venv
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS specific files
+.DS_Store
+
+# Secrets
+.env
+
+# Lock file (we use requirements.txt)
+uv.lock
+pyproject.toml
+requirements.txt # Added: No longer used by Dockerfile
+
+# Other build artifacts if any
+.idea/
+*.egg-info/
+dist/
+build/
