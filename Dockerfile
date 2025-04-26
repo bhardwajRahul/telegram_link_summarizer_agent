@@ -4,14 +4,17 @@ FROM python:3.11-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Install uv
+RUN pip install --no-cache-dir uv
+
 # Install system dependencies if needed (placeholder)
 # RUN apt-get update && apt-get install -y --no-install-recommends some-package && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file first to leverage Docker cache
-COPY requirements.txt ./
+# Copy only the necessary files for dependency installation first
+COPY pyproject.toml uv.lock* ./
 
-# Install dependencies using pip
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies using uv
+RUN uv pip sync --no-cache --system pyproject.toml
 
 # Copy the rest of the application code into the container at /app
 COPY . .
