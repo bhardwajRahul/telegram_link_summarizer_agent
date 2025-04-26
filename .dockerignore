@@ -17,10 +17,10 @@ __pycache__/
 # Secrets
 .env
 
-# Lock file (we use requirements.txt)
-uv.lock
-pyproject.toml
-requirements.txt # Added: No longer used by Dockerfile
+# We copy pyproject.toml and uv.lock now
+# uv.lock
+# pyproject.toml
+requirements.txt # No longer used by Dockerfile
 
 # Other build artifacts if any
 .idea/
