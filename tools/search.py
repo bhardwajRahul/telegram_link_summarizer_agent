@@ -1,15 +1,15 @@
-import sys
 import os
 from rich.console import Console
 from tavily import TavilyClient
+from dotenv import load_dotenv
 
-sys.path.append(os.getcwd())
-
-from config import TAVILY_API_KEY
+# Load environment variables from .env file
+load_dotenv(override=True)
 
 console = Console()
 
 # --- Tavily Client Initialization ---
+TAVILY_API_KEY: str | None = os.getenv("TAVILY_API_KEY")
 tavily_client = None
 if TAVILY_API_KEY:
     try:

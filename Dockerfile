@@ -1,24 +1,25 @@
 # Use an official Python runtime as a parent image
-FROM python:3.11-slim as builder
+FROM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Install uv
-RUN pip install --no-cache-dir uv
-
 # Install system dependencies if needed (placeholder)
 # RUN apt-get update && apt-get install -y --no-install-recommends some-package && rm -rf /var/lib/apt/lists/*
 
-# Copy the project and lock files
-COPY pyproject.toml uv.lock ./
+# Copy the requirements file first to leverage Docker cache
+COPY requirements.txt ./
 
-# Install dependencies using uv and the lock file
-# Use --system to install into the system Python environment
-RUN uv pip sync --no-cache --system uv.lock
+# Install dependencies using pip
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container at /app
 COPY . .
 
-# Specify the command to run on container start
-CMD ["python", "bot.py"]
+# Expose the port the app runs on (adjust if your app uses a different port)
+# Cloud Run automatically uses the port defined by the PORT env var (default 8080)
+EXPOSE 8080
+
+# Specify the command to run on container start using Uvicorn
+# Runs the FastAPI app defined as 'app' in the 'bot.py' module
+CMD ["uvicorn", "bot:app", "--host", "0.0.0.0", "--port", "8080"]

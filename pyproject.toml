@@ -24,6 +24,8 @@ dependencies = [
     "rich>=14.0.0",
     "loguru>=0.7.3",
     "pyppeteer>=2.0.0",
+    "fastapi>=0.115.12",
+    "uvicorn>=0.34.2",
 ]
 
 [tool.setuptools]
