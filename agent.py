@@ -5,9 +5,9 @@ from baml_client.types import Summary, ContentType
 import re
 
 from rich.console import Console 
-# Import tool functions
-# from tools.scrape import is_pdf_url, extract_text_from_pdf
 from tools.search import run_tavily_tool
+from tools.pdf_handler import get_pdf_text
+
 
 console = Console()
 
@@ -72,14 +72,29 @@ def get_web_content(state: AgentState) -> AgentState:
     }
 
 def handle_pdf_content(state: AgentState) -> AgentState:
-    """Placeholder for PDF content handling."""
-    console.print("---HANDLE PDF CONTENT (Placeholder) ---", style="bold yellow")
+    """Downloads and extracts text from a PDF URL."""
+    console.print("---HANDLE PDF CONTENT---", style="bold yellow")
     url = state['url']
-    console.print(f"PDF handling not yet implemented for: {url}", style="magenta")
-    # In the future, implement PDF extraction and RAG here
-    # For now, returning an error or dummy content
-    # return {"error": "PDF processing is not yet implemented."}
-    return {"content": f"Placeholder content for PDF: {url}", "content_type": ContentType.PDF} # Allow summarization for now
+    error_message = None
+    pdf_text = ""
+    try:
+        extracted_text = get_pdf_text(url)
+        if extracted_text.startswith("Error:"):
+            console.print(f"Error getting PDF content: {extracted_text}", style="red bold")
+            error_message = extracted_text
+        else:
+            console.print(f"Successfully extracted text from PDF: {url}", style="magenta")
+            pdf_text = extracted_text
+
+    except Exception as e:
+        console.print(f"Unexpected error handling PDF {url}: {e}", style="red bold")
+        error_message = f"Error: An unexpected error occurred while processing the PDF. {e}"
+
+    return {
+        "content": pdf_text,
+        "content_type": ContentType.PDF,
+        "error": error_message
+    }
 
 def summarize_content(state: AgentState) -> AgentState:
     """Summarizes the extracted content using BAML."""
