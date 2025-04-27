@@ -36,6 +36,9 @@ dependencies = [
     "annotated-types>=0.7.0",
     "anyio>=4.9.0",
     "tweepy>=4.15.0",
+    "selenium>=4.31.0",
+    "nest-asyncio>=1.6.0",
+    "webdriver-manager>=4.0.2",
 ]
 
 [tool.setuptools]

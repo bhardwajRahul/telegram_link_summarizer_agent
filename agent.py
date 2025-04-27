@@ -1,15 +1,17 @@
-from typing import TypedDict, Dict, Any
-from langgraph.graph import StateGraph, END
-from baml_client import b
-from baml_client.types import Summary, ContentType
-import re
-from dotenv import load_dotenv
 import os
+import re
+from typing import Any, Dict, Tuple, TypedDict, Union
+
+from baml_client import b
+from baml_client.types import ContentType, Summary
+from dotenv import load_dotenv
 import tweepy
 
+from langgraph.graph import StateGraph, END
 from rich.console import Console 
 from tools.search import run_tavily_tool
 from tools.pdf_handler import get_pdf_text
+from tools.scrape import get_page_content_selenium, get_page_screenshot_selenium
 
 load_dotenv()
 
@@ -24,6 +26,8 @@ class AgentState(TypedDict):
     content: str
     summary: str
     error: str | None
+    screenshot_bytes: bytes | None
+    fallback_content: str | None
 
 # --- Define Graph Nodes --- 
 
@@ -148,7 +152,7 @@ def get_twitter_content(state: AgentState) -> AgentState:
                 error_detail = "; ".join([e.get('detail', str(e)) for e in response.errors])
             error_message = f"Tweepy could not find or access tweet ID: {tweet_id}. Reason: {error_detail}"
             console.print(error_message, style="red")
-
+            
     except tweepy.errors.TweepyException as e:
         console.print(f"Tweepy API error for URL {url}: {e}", style="red bold")
         error_message = f"Error: A Tweepy API error occurred: {e}"
@@ -190,29 +194,104 @@ def handle_pdf_content(state: AgentState) -> AgentState:
         "error": error_message
     }
 
+def fallback_scrape(state: AgentState) -> AgentState:
+    """Attempts to get page content and a screenshot using Selenium as a fallback."""
+    initial_error = state.get('error', 'No specific error before fallback')
+    console.print(f"---FALLBACK SCRAPE ({initial_error})---", style="bold red")
+    url = state['url']
+
+    # Clear previous error before attempting fallback
+    state['error'] = None # Clear error before attempting fallback
+    screenshot_bytes = None
+    fallback_content = None
+    fallback_error = None
+
+    # Attempt to get page content using Selenium
+    try:
+        console.print(f"Attempting Selenium content scrape for: {url}", style="yellow")
+        content_result = get_page_content_selenium(url)
+        
+        # The function now always returns a string - either content or error message
+        if content_result and not content_result.startswith("Error:"):
+            fallback_content = content_result
+            console.print(f"Successfully scraped content with Selenium for: {url}", style="green")
+        else:
+            # It's an error message from the tool
+            fallback_error = content_result if content_result else "Selenium content scrape failed without specific error"
+            console.print(fallback_error, style="red")
+
+    except Exception as e_content:
+        err_msg = f"Unexpected error during Selenium content scrape for {url}: {e_content}"
+        console.print(err_msg, style="red bold")
+        # Append to existing error or set if none exists
+        fallback_error = f"{fallback_error}\n{err_msg}" if fallback_error else err_msg
+
+    # Attempt to get screenshot using Selenium (regardless of content success/failure)
+    try:
+        console.print(f"Attempting Selenium screenshot for: {url}", style="yellow")
+        screenshot_result = get_page_screenshot_selenium(url)
+        
+        # Check if we got bytes (success) or a string (error message)
+        if isinstance(screenshot_result, bytes):
+            screenshot_bytes = screenshot_result
+            console.print(f"Successfully took screenshot with Selenium for: {url}", style="green")
+        elif isinstance(screenshot_result, str):
+            # It's an error message from the tool
+            screenshot_error = screenshot_result
+            console.print(screenshot_error, style="red")
+            # Append to existing error or set if none exists
+            fallback_error = f"{fallback_error}\n{screenshot_error}" if fallback_error else screenshot_error
+        else:
+            # Unexpected return type
+            screenshot_error = "Selenium screenshot returned unexpected type."
+            console.print(screenshot_error, style="red")
+            fallback_error = f"{fallback_error}\n{screenshot_error}" if fallback_error else screenshot_error
+
+    except Exception as e_screenshot:
+        err_msg = f"Unexpected error during Selenium screenshot for {url}: {e_screenshot}"
+        console.print(err_msg, style="red bold")
+        fallback_error = f"{fallback_error}\n{err_msg}" if fallback_error else err_msg
+
+    # Log the results for debugging
+    console.print(f"Fallback results: Screenshot: {'Yes' if screenshot_bytes else 'No'}, Content: {'Yes' if fallback_content else 'No'}", style="cyan")
+    
+    # Update state with results and any errors encountered during fallback
+    return {
+        "screenshot_bytes": screenshot_bytes,
+        "fallback_content": fallback_content,
+        "error": fallback_error # This will contain errors from both attempts if they occurred
+    }
+
 def summarize_content(state: AgentState) -> AgentState:
     """Summarizes the extracted content using BAML."""
+    print(f"--- Debug: summarize_content received state: { {k: (type(v), len(v) if isinstance(v, (str, bytes)) else v) for k, v in state.items()} } ---")
     console.print("---SUMMARIZE CONTENT---", style="bold green")
-    # Check for errors from previous steps FIRST
-    if state.get('error'):
-        console.print(f"Skipping summarization due to previous error: {state['error']}", style="bold yellow")
-        # Ensure summary is empty if skipped
-        return {"summary": state.get('summary', '')}
+    
+    # Determine which content to use (primary or fallback)
+    content_to_summarize = state.get('content')
+    source = "primary content"
 
-    content = state.get('content') # Use .get() for safety, though error check should cover it
-    if not content:
-        console.print("Skipping summarization due to empty content.", style="yellow")
-        # Ensure summary is empty if skipped
-        return {"summary": state.get('summary', '')}
+    if not content_to_summarize:
+        content_to_summarize = state.get('fallback_content')
+        source = "fallback content"
 
+    if not content_to_summarize:
+        print("--- Debug: No content found (primary or fallback) for summarization. Skipping. ---")
+        console.print("No content available to summarize.", style="yellow")
+        # Return state unchanged if no content; error handling might be better
+        return {"summary": "", "error": state.get("error") or "No content found to summarize."} # Keep existing error or add new one
+
+    print(f"--- Debug: Summarizing {len(content_to_summarize)} chars from {source} ---")
+
+    url = state.get('url', 'Unknown URL')
+    # Call BAML client to summarize
     try:
-        # Assuming Summarize is the correct BAML function name based on baml_src/summarize.baml
         summary_result: Summary = b.SummarizeContent(
-            content=state['content'],
-            contentType=state['content_type'],
+            content=content_to_summarize,  # Use the content we selected above
+            content_type=state['content_type'],
             context=state['original_message']
         )
-        console.print("Successfully generated summary.", style="bold green")
+        console.print(f"Successfully generated summary from {source}.", style="bold green")
         title = getattr(summary_result, 'title', 'Error')
         points = getattr(summary_result, 'key_points', [])
         summary = getattr(summary_result, 'concise_summary', 'Summarization service returned an unexpected response format.')
@@ -229,71 +308,223 @@ def summarize_content(state: AgentState) -> AgentState:
         return {"summary": formatted_summary, "error": None}
 
     except Exception as e:
-        console.print(f"Error during summarization: {e}", style="bold red")
-        return {"error": f"Failed to summarize content: {e}"}
+        console.print(f"Error during summarization for {url}: {e}", style="red bold")
+        print(f"--- Debug: BAML summarization error: {e} ---")
+        state_update = {"summary": "", "error": f"Summarization failed: {e}"} # Update error
+        return state_update
+
+# --- Conditional Edges Logic ---
+
+def route_content_extraction(state: AgentState) -> str:
+    """Determines the content extraction route."""
+    console.print("---ROUTING--- ", style="yellow bold")
+    url = state['url']
+    if url.lower().endswith('.pdf'):
+        console.print(f"Routing to PDF handler for: {url}", style="blue")
+        return "pdf_extractor"
+    elif re.search(r"https?://(www\.)?(twitter|x)\.com", url, re.IGNORECASE):
+        console.print(f"Routing to Twitter extractor for URL: {url}", style="magenta")
+        return "twitter_extractor"
+    else:
+        console.print(f"Routing to Web extractor for URL: {url}", style="magenta")
+        return "web_extractor"
+
+def should_fallback(state: AgentState) -> str:
+    """Determines whether to proceed to summarization or fallback to scraping."""
+    print(f"--- Debug: should_fallback received state: { {k: (type(v), len(v) if isinstance(v, (str, bytes)) else v) for k, v in state.items()} } ---")
+    if state.get('error') or not state.get('content'):
+        console.print("Routing: Condition met for Fallback Scrape.", style="yellow")
+        return "fallback_scrape"
+    else:
+        console.print("Routing: Condition met for Summarization.", style="green")
+        return "summarize_content"
+
+def should_summarize_fallback(state: AgentState) -> str:
+    """Determines routing after fallback: summarize text, end with screenshot, or end on failure."""
+    print(f"--- Debug: should_summarize_fallback received state: { {k: (type(v), len(v) if isinstance(v, (str, bytes)) else v) for k, v in state.items()} } ---")
+    
+    # Check if we have fallback content to summarize
+    if state.get('fallback_content'):
+        # If we have fallback content, use it for summarization
+        console.print("Routing: Fallback provided text, routing to Summarization.", style="green")
+        return "summarize_content"
+    
+    # If we only have a screenshot but no content, go to END
+    # The run_agent function will handle returning the screenshot
+    elif state.get('screenshot_bytes'):
+        console.print("Routing: Fallback provided only screenshot, routing to END.", style="magenta")
+        return END
+    
+    # Fallback failed completely
+    else:
+        console.print("Routing: Fallback failed, routing to END.", style="red")
+        return END
+
+# --- Build the Graph ---
 
 def build_graph():
-    # --- Build the Graph --- 
     workflow = StateGraph(AgentState)
 
     # Add nodes
     workflow.add_node("init", init_state)
     workflow.add_node("web_extractor", get_web_content)
+    workflow.add_node("pdf_extractor", handle_pdf_content)
     workflow.add_node("twitter_extractor", get_twitter_content)
-    workflow.add_node("pdf_handler", handle_pdf_content)
-    workflow.add_node("summarizer", summarize_content)
+    workflow.add_node("fallback_scrape", fallback_scrape)
+    workflow.add_node("summarize_content", summarize_content)
 
-    # Set entry point
+    # Define edges
     workflow.set_entry_point("init")
 
-    # Add conditional routing
+    # Route from identifier to the correct extractor
     workflow.add_conditional_edges(
         "init",
-        route_content_type,
+        route_content_extraction,
         {
             "web_extractor": "web_extractor",
+            "pdf_extractor": "pdf_extractor",
             "twitter_extractor": "twitter_extractor",
-            "pdf_handler": "pdf_handler",
+            END: END # If routing fails (e.g., no URL found in init)
         }
     )
 
-    # Connect nodes
-    workflow.add_edge("web_extractor", "summarizer")
-    workflow.add_edge("twitter_extractor", "summarizer")
-    workflow.add_edge("pdf_handler", "summarizer")
-    workflow.add_edge("summarizer", END)
+    # Route from primary extractors: fallback or summarize
+    workflow.add_conditional_edges(
+        "web_extractor",
+        should_fallback,
+        {"summarize_content": "summarize_content", "fallback_scrape": "fallback_scrape"}
+    )
+    workflow.add_conditional_edges(
+        "pdf_extractor",
+        should_fallback,
+        {"summarize_content": "summarize_content", "fallback_scrape": "fallback_scrape"}
+    )
+    workflow.add_conditional_edges(
+        "twitter_extractor",
+        should_fallback,
+        {"summarize_content": "summarize_content", "fallback_scrape": "fallback_scrape"}
+    )
 
-    # Compile the graph
-    app = workflow.compile()
-    return app
+    # Route from fallback scrape: summarize text or end
+    workflow.add_conditional_edges(
+        "fallback_scrape",
+        should_summarize_fallback,
+        {"summarize_content": "summarize_content", END: END}
+    )
 
+    # Summarizer always goes to end
+    workflow.add_edge("summarize_content", END)
+
+    return workflow.compile()
 
 graph = build_graph()
 
 # --- Main Agent Function --- 
-def run_agent(url: str) -> str | None:
-    """Runs the LangGraph agent workflow. Returns summary on success, None otherwise."""
-    console.print(f"--- Starting Agent for message: '{url[:50]}...' ---", style="bold blue")
-    original_message  = f"Please summarize this link: {url}"
-    initial_state = {"original_message": original_message, "url": url}
-    try:
-        # Or just invoke and get the final state
-        final_state = graph.invoke(initial_state)
 
-        console.print("--- Agent Finished ---", style="bold blue")
-        if final_state.get('error'):
-            console.print(f"Agent finished with error: {final_state['error']}", style="bold red")
-            return None
-        elif final_state.get('summary'):
-            console.print(f"Agent finished with summary: {final_state['summary'][:100]}...", style="green")
-            return final_state['summary']
+async def run_agent(message: str) -> Union[str, Tuple[bytes, str | None], None]:
+    """
+    Runs the LangGraph agent workflow.
+
+    Args:
+        message: The original message containing the URL.
+
+    Returns:
+        - Tuple[bytes, str]: Screenshot bytes and summary text when both are available.
+        - Tuple[bytes, str | None]: Screenshot bytes and optional fallback text if fallback scrape ran.
+          The text part can be None if content scraping failed but screenshot succeeded.
+        - str: Summary text on successful text extraction and summarization (when no screenshot is available).
+        - str: An error message string if a significant error occurred preventing any output.
+        - None: If all attempts (extraction, summarization, fallback) fail and no screenshot is available.
+    """
+    inputs = {"original_message": message}
+    final_state = None
+    try:
+        # Use graph.ainvoke for async execution if needed, otherwise graph.invoke
+        async for output in graph.astream(inputs, {"recursion_limit": 10}):
+            # stream() yields dictionaries with node names as keys
+            for key, value in output.items():
+                console.print(f"Output from node '{key}':", style="cyan")
+                # console.print(value) # Optional: Print the full state after each node
+                final_state = value # Keep track of the latest state
+
+        if final_state:
+            # Debug: Print the final state to see what we have
+            console.print("FINAL STATE KEYS:", style="bold magenta")
+            for key, value in final_state.items():
+                if isinstance(value, bytes):
+                    console.print(f"  {key}: <bytes> ({len(value)} bytes)", style="magenta")
+                elif isinstance(value, str) and len(value) > 100:
+                    console.print(f"  {key}: <string> ({len(value)} chars)", style="magenta")
+                else:
+                    console.print(f"  {key}: {value}", style="magenta")
+            
+            # Check if we have a screenshot (either from fallback or taken separately)
+            screenshot_bytes = final_state.get("screenshot_bytes")
+            if screenshot_bytes:
+                console.print(f"Screenshot available: {len(screenshot_bytes)} bytes", style="bold green")
+            else:
+                console.print("No screenshot available", style="bold yellow")
+            
+            # 1. Successful Summary
+            if final_state.get("summary"):
+                summary_text = final_state["summary"]
+                console.print("---AGENT FINISHED: Summary---", style="bold green")
+                
+                # If we have both screenshot and summary, return both
+                if screenshot_bytes:
+                    console.print("---AGENT FINISHED: Summary + Screenshot---", style="bold green")
+                    console.print(f"Returning tuple: (screenshot_bytes[{len(screenshot_bytes)} bytes], summary_text[{len(summary_text)} chars])", style="bold green")
+                    return (screenshot_bytes, summary_text)  # Return both screenshot and summary
+                else:
+                    # Otherwise just return the summary
+                    console.print(f"Returning summary_text only: {len(summary_text)} chars", style="bold green")
+                    return summary_text
+
+            # 2. Fallback Scrape Occurred
+            elif screenshot_bytes is not None or final_state.get("fallback_content") is not None:
+                 content = final_state.get("fallback_content")
+                 # Prioritize returning screenshot if available
+                 if screenshot_bytes:
+                     console.print("---AGENT FINISHED: Fallback Screenshot (and maybe Content)---", style="bold yellow")
+                     console.print(f"Returning tuple: (screenshot_bytes[{len(screenshot_bytes)} bytes], content[{len(content) if content else 0} chars])", style="bold yellow")
+                     return (screenshot_bytes, content) # Return tuple (bytes, str or None)
+                 # If only fallback content exists (screenshot failed but content didn't)
+                 elif content:
+                     console.print("---AGENT FINISHED: Fallback Content Only---", style="bold yellow")
+                     # Decide how to handle this - maybe summarize fallback content?
+                     # For now, return it directly as text. Bot needs to handle this.
+                     # Consider adding a summarization step for fallback_content later.
+                     console.print(f"Returning fallback content only: {len(content)} chars", style="bold yellow")
+                     return "Fallback Content:\n" + content # Return as string
+                 else: # Fallback ran but failed for both screenshot and content
+                      console.print("---AGENT FINISHED: Fallback Failed Completely---", style="bold red")
+                      error_msg = final_state.get("error", "Fallback failed without specific error.")
+                      console.print(f"Returning error message: {error_msg}", style="bold red")
+                      return "Error: Failed to process the URL even with fallback. Details: " + error_msg
+
+
+            # 3. Initial Extraction/Routing Error (before fallback)
+            elif final_state.get("error"):
+                console.print("---AGENT FINISHED: Error (Before Fallback)---", style="bold red")
+                console.print(f"Returning error message: {final_state['error']}", style="bold red")
+                return "Error: " + final_state['error']
+
+            # 4. Unexpected scenario
+            else:
+                console.print("---AGENT FINISHED: Unknown State---", style="bold red")
+                console.print("Returning generic error message", style="bold red")
+                return "Error: Agent finished in an unexpected state."
+
         else:
-            console.print("Agent finished but no summary or error was produced.", style="yellow")
-            return None
+             console.print("---AGENT FAILED: No Final State---", style="bold red")
+             console.print("Returning error about no final state", style="bold red")
+             return "Error: Agent workflow did not produce a final state."
 
     except Exception as e:
-        console.print(f"Unhandled exception in agent execution: {e}", style="bold red")
-        return None
+        console.print("---AGENT FAILED: Runtime Exception---", style="bold red")
+        console.print_exception(show_locals=True)
+        console.print(f"Returning error message: {str(e)}", style="bold red")
+        return "Error: An unexpected error occurred in the agent: " + str(e)
 
 # Example usage (for testing)
 if __name__ == "__main__":

@@ -100,7 +100,7 @@ class BamlSyncClient:
     
     def SummarizeContent(
         self,
-        content: str,contentType: types.ContentType,context: Optional[str],
+        content: str,content_type: types.ContentType,context: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> types.Summary:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -116,7 +116,7 @@ class BamlSyncClient:
       raw = self.__runtime.call_function_sync(
         "SummarizeContent",
         {
-          "content": content,"contentType": contentType,"context": context,
+          "content": content,"content_type": content_type,"context": context,
         },
         self.__ctx_manager.get(),
         tb,
@@ -140,7 +140,7 @@ class BamlStreamClient:
     
     def SummarizeContent(
         self,
-        content: str,contentType: types.ContentType,context: Optional[str],
+        content: str,content_type: types.ContentType,context: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Summary, types.Summary]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -157,7 +157,7 @@ class BamlStreamClient:
         "SummarizeContent",
         {
           "content": content,
-          "contentType": contentType,
+          "content_type": content_type,
           "context": context,
         },
         None,

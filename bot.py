@@ -46,9 +46,10 @@ if not WEBHOOK_URL:
 # --- Global Application Object ---
 ptb_app = Application.builder().token(BOT_TOKEN).build()
 
-# --- Message Handler (Keep existing logic) ---
+# --- Message Handler --- 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles incoming text messages, extracts URLs, and triggers the summarizer agent."""
+    """Handles incoming text messages, extracts URLs, triggers the agent,
+    and replies with a summary, a screenshot + fallback text, or an error."""
     message = update.effective_message
     chat_id = message.chat_id
     text = message.text
@@ -68,40 +69,115 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Send a typing indicator
     await context.bot.send_chat_action(chat_id=chat_id, action='typing')
 
-    # Pass the original message text to the agent, as it might contain context/query
-    # Or just pass the URL if the agent's start_node is designed for that
-    # Current agent.run_agent expects the full message text
-    summary_or_error = None # Initialize
+    agent_result = None # Initialize
     try:
-        # Run the agent. Expecting a summary string on success,
-        # or potentially None/empty string/error string on failure within the agent.
-        summary_or_error = run_agent(text)
+        # Run the agent (now async)
+        # Expecting:
+        # - Tuple[bytes, str]: Screenshot + summary when both are available
+        # - Tuple[bytes, str|None]: Screenshot + fallback content (or None)
+        # - str: Summary text or error message
+        # - None: Unexpected failure
+        agent_result = await run_agent(text) # Pass the original message
+        
+        # Debug logging to see what we got from the agent
+        if isinstance(agent_result, tuple):
+            logger.info(f"Agent returned a tuple: {type(agent_result)} with {len(agent_result)} items")
+            if len(agent_result) >= 1:
+                logger.info(f"First item type: {type(agent_result[0])}")
+                if isinstance(agent_result[0], bytes):
+                    logger.info(f"Screenshot size: {len(agent_result[0])} bytes")
+            if len(agent_result) >= 2:
+                logger.info(f"Second item type: {type(agent_result[1])}")
+                if isinstance(agent_result[1], str):
+                    logger.info(f"Text content length: {len(agent_result[1])} chars")
+        elif isinstance(agent_result, str):
+            logger.info(f"Agent returned a string of length {len(agent_result)}")
+        else:
+            logger.info(f"Agent returned type: {type(agent_result)}")
 
-        # Check if the agent indicated an error or returned no summary
-        if not summary_or_error:
-            logger.warning(f"Agent returned no summary or indicated an error for chat {chat_id} and URL {url}. No reply sent.")
-            # Optionally, log the specific error if the agent returns it distinctly
-            # if isinstance(summary_or_error, str) and summary_or_error.startswith("Error:"):
-            #     logger.error(f"Agent error for chat {chat_id}: {summary_or_error}")
-            return # Exit without sending a message
+        MAX_LEN = 4096 # Max Telegram message length
 
-        # Escape HTML characters in the result to prevent formatting issues
-        # Limit message length to Telegram's max (4096 chars)
-        MAX_LEN = 4096
-        escaped_result = html.escape(summary_or_error)
-        if len(escaped_result) > MAX_LEN:
-            escaped_result = escaped_result[:MAX_LEN-10] + "... (truncated)"
+        # --- Handle Tuple Result (Screenshot + Text) ---
+        if isinstance(agent_result, tuple) and len(agent_result) == 2:
+            screenshot_bytes, text_content = agent_result
+            
+            # Send screenshot if available
+            if isinstance(screenshot_bytes, bytes):
+                logger.info(f"Sending screenshot to chat {chat_id} for URL: {url}")
+                
+                # Determine if this is a summary or fallback content
+                is_summary = text_content and not text_content.startswith("Fallback Content:")
+                
+                # Set appropriate caption
+                if is_summary:
+                    caption = f"Screenshot for: {url}"
+                else:
+                    caption = f"Screenshot for: {url}"
+                    if not text_content:
+                        caption += "\n(Content extraction failed)"
+                
+                try:
+                    # Send the screenshot
+                    await message.reply_photo(photo=screenshot_bytes, caption=caption)
+                    logger.info(f"Successfully sent screenshot to chat {chat_id}")
+                except Exception as photo_err:
+                    logger.error(f"Failed to send photo: {photo_err}")
+                    # Try sending as document if photo fails
+                    try:
+                        logger.info("Trying to send as document instead...")
+                        await message.reply_document(document=screenshot_bytes, caption=caption)
+                        logger.info(f"Successfully sent screenshot as document to chat {chat_id}")
+                    except Exception as doc_err:
+                        logger.error(f"Failed to send document too: {doc_err}")
+            else:
+                logger.warning(f"Agent returned tuple but no screenshot bytes for {url}. Type: {type(screenshot_bytes)}")
 
-        # Send the result back ONLY if successful
-        await message.reply_text(escaped_result, parse_mode=ParseMode.HTML)
-        logger.info(f"Sent summary back to chat {chat_id}")
+            # Send text content if available (either summary or fallback content)
+            if isinstance(text_content, str) and text_content:
+                logger.info(f"Sending {'summary' if is_summary else 'fallback content'} to chat {chat_id} for URL: {url}")
+                escaped_content = html.escape(text_content)
+                if len(escaped_content) > MAX_LEN:
+                    escaped_content = escaped_content[:MAX_LEN-20] + "... (truncated)"
+                await message.reply_text(escaped_content, parse_mode=ParseMode.HTML)
+                logger.info(f"Sent text content to chat {chat_id}")
+
+        # --- Handle String Result (Summary or Error) ---
+        elif isinstance(agent_result, str) and agent_result:
+            # Check if it's an error message from the agent
+            if agent_result.startswith("Error:"):
+                logger.error(f"Agent returned an error for chat {chat_id} (URL: {url}): {agent_result}")
+                escaped_error = html.escape(agent_result)
+                if len(escaped_error) > MAX_LEN:
+                    escaped_error = escaped_error[:MAX_LEN-20] + "... (error truncated)"
+                await message.reply_text(escaped_error, parse_mode=ParseMode.HTML)
+            
+            # Otherwise, it's a summary or fallback content
+            else:
+                content_type = "fallback content" if agent_result.startswith("Fallback Content:") else "summary"
+                logger.info(f"Sending {content_type} back to chat {chat_id} for URL: {url}")
+                escaped_result = html.escape(agent_result)
+                if len(escaped_result) > MAX_LEN:
+                    escaped_result = escaped_result[:MAX_LEN-20] + f"... ({content_type} truncated)"
+                await message.reply_text(escaped_result, parse_mode=ParseMode.HTML)
+                logger.info(f"Sent {content_type} back to chat {chat_id}")
+
+        # --- Handle Failure (None or Unexpected Type) ---
+        else:
+            error_info = f"Type: {type(agent_result)}" if agent_result is not None else "None"
+            logger.warning(f"Agent returned unexpected result ({error_info}) for chat {chat_id} and URL {url}. No reply sent.")
+            # Optionally send a generic failure message
+            # await message.reply_text("Sorry, failed to process the URL.")
 
     except Exception as e:
         # Log any exception during agent execution or message handling
         logger.error(f"Error handling message for chat {chat_id} (URL: {url}): {e}", exc_info=True)
-        # DO NOT send an error message back to the chat per user request
-        # error_message = f"Sorry, an error occurred: {html.escape(str(e))}"
-        # await message.reply_text(error_message[:4096], parse_mode=ParseMode.HTML)
+        # Send a generic error message to the user
+        error_message = f"Sorry, an unexpected error occurred while processing your request for {url}."
+        try:
+            await message.reply_text(html.escape(error_message), parse_mode=ParseMode.HTML)
+        except Exception as send_err:
+            logger.error(f"Failed to send error message to chat {chat_id}: {send_err}")
+
 
 # --- FastAPI Lifespan Management (Setup/Teardown) ---
 @asynccontextmanager

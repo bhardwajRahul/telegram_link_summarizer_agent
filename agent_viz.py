@@ -26,7 +26,7 @@ def _():
     )
 
     # Display the image using marimo
-    mo.image(src=png_bytes, alt="LangGraph Flow", caption="Survey Workflow Graph")
+    mo.image(src=png_bytes, alt="LangGraph Flow", caption="Telegram Summarizer Bot Graph")
     return
 
 

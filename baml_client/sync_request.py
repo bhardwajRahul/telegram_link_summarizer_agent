@@ -39,7 +39,7 @@ class HttpRequest:
     
     def SummarizeContent(
         self,
-        content: str,contentType: types.ContentType,context: Optional[str],
+        content: str,content_type: types.ContentType,context: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -52,7 +52,7 @@ class HttpRequest:
       return self.__runtime.build_request_sync(
         "SummarizeContent",
         {
-          "content": content,"contentType": contentType,"context": context,
+          "content": content,"content_type": content_type,"context": context,
         },
         self.__ctx_manager.get(),
         tb,
@@ -73,7 +73,7 @@ class HttpStreamRequest:
     
     def SummarizeContent(
         self,
-        content: str,contentType: types.ContentType,context: Optional[str],
+        content: str,content_type: types.ContentType,context: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -86,7 +86,7 @@ class HttpStreamRequest:
       return self.__runtime.build_request_sync(
         "SummarizeContent",
         {
-          "content": content,"contentType": contentType,"context": context,
+          "content": content,"content_type": content_type,"context": context,
         },
         self.__ctx_manager.get(),
         tb,
