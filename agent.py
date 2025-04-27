@@ -3,11 +3,15 @@ from langgraph.graph import StateGraph, END
 from baml_client import b
 from baml_client.types import Summary, ContentType
 import re
+from dotenv import load_dotenv
+import os
+import tweepy
 
 from rich.console import Console 
 from tools.search import run_tavily_tool
 from tools.pdf_handler import get_pdf_text
 
+load_dotenv()
 
 console = Console()
 
@@ -33,41 +37,131 @@ def init_state(state: AgentState) -> Dict[str, Any]:
         return {"error": "No URL found in the message."}
     return {"url": url}
 
-def route_content_type(state: AgentState) -> AgentState:
-    """Determines if the URL is a PDF or a webpage."""
+def route_content_type(state: AgentState) -> str:
+    """Determines if the URL is a PDF, Twitter/X, or a webpage."""
     console.print("---ROUTING--- ", style="yellow bold")
     url = state['url']
     if url.lower().endswith('.pdf'):
         console.print(f"Routing to PDF handler for: {url}", style="blue")
-        return "pdf_handler"
+        return "pdf_extractor"
+    elif re.search(r"https?://(www\.)?(twitter|x)\.com", url, re.IGNORECASE):
+        console.print(f"Routing to Twitter extractor for URL: {url}", style="magenta")
+        return "twitter_extractor"
     else:
-        console.print(f"Routing to Web Extract for: {url}", style="cyan")
+        console.print(f"Routing to Web extractor for URL: {url}", style="magenta")
         return "web_extractor"
 
 def get_web_content(state: AgentState) -> AgentState:
-    """Fetches content from a webpage URL."""
-    console.print("---GET WEB CONTENT---", style="yellow bold")
+    """Fetches content from a standard webpage URL using Tavily extract."""
+    console.print("---GET WEB CONTENT (Standard URL)---", style="yellow bold")
     url = state['url']
-    error_message=None
-    try:
-        extract_tool_results = run_tavily_tool(mode='extract', urls=[url])
-        results_list = extract_tool_results.get('results', '')
-        extract_content_source = ""
-        for res in results_list:
-            extract_content_source += f"URL: {res['url']}\n"
-            extract_content_source += f"Raw Content: {res['raw_content']}\n"
-            # extract_content_source += f"Images: {res['images']}\n"
+    error_message = None
+    content_source = ""
+    content_type = ContentType.Webpage
 
-        if len(extract_tool_results.get("failed_results", [])) > 0:
-            error_message = extract_tool_results.get("failed_results")
-            extract_content_source = ""
+    try:
+        # Use Tavily extract for non-Twitter URLs
+        console.print(f"Using Tavily extract for: {url}", style="cyan")
+        extract_tool_results = run_tavily_tool(mode='extract', urls=[url])
+        results_list = extract_tool_results.get('results', [])
+        failed_results = extract_tool_results.get("failed_results", [])
+
+        if results_list:
+            for res in results_list:
+                # Try to get 'raw_content' first, fallback to 'content'
+                raw_content = res.get('raw_content')
+                if not raw_content:
+                    raw_content = res.get('content', '') # Fallback if raw_content is missing
+                
+                if raw_content: # Only add if content exists
+                    content_source += f"URL: {res.get('url', 'N/A')}\n"
+                    content_source += f"Raw Content: {raw_content}\n\n"
+                # Optional: Include images if needed later
+                # content_source += f"Images: {res.get('images', [])}\n"
+        
+        if failed_results:
+            error_message = f"Tavily failed to extract content from: {', '.join(failed_results)}"
+            console.print(error_message, style="red")
+            # If extraction failed entirely and we have no content, set content_source empty
+            if not content_source:
+                content_source = ""
+        
+        # If after trying extract, we still have no content and no specific error, set a generic one
+        if not content_source and not error_message:
+            error_message = "Tavily extract did not return any content for the URL."
+            console.print(error_message, style="red")
+
     except Exception as e:
-        console.print(f"Error extracting content from URL {url}: {e}", style="red bold")
-        error_message = f"Error: An unexpected error occurred while extracting content from the URL. {e}"
-        extract_content_source = ""
+        console.print(f"Error getting content from URL {url}: {e}", style="red bold")
+        error_message = f"Error: An unexpected error occurred while getting content from the URL. {e}"
+        content_source = "" # Ensure content is empty on error
+
     return {
-        "content_type": ContentType.Webpage,
-        "content": extract_content_source,
+        "content_type": content_type,
+        "content": content_source.strip(), # Strip leading/trailing whitespace
+        "error": error_message
+    }
+
+def get_twitter_content(state: AgentState) -> AgentState:
+    """Fetches content from a Twitter/X URL using tweepy."""
+    console.print("---GET TWITTER/X CONTENT (tweepy)---", style="yellow bold")
+    url = state['url']
+    error_message = None
+    tweet_text = ""
+    content_type = ContentType.Webpage # Treat as webpage for summarization
+
+    bearer_token = os.getenv("X_BEARER_TOKEN")
+    if not bearer_token:
+        error_message = "Error: X_BEARER_TOKEN not found in environment variables."
+        console.print(error_message, style="red bold")
+        return {
+            "content_type": content_type,
+            "content": "",
+            "error": error_message
+        }
+
+    try:
+        # Extract tweet ID from URL
+        match = re.search(r"/status/(\d+)", url)
+        if not match:
+            raise ValueError("Could not extract Tweet ID from URL")
+        tweet_id = match.group(1)
+        console.print(f"Extracted Tweet ID: {tweet_id}", style="cyan")
+
+        client = tweepy.Client(bearer_token)
+        console.print(f"Fetching tweet ID: {tweet_id} using tweepy", style="cyan")
+        # Fetch tweet, requesting author ID and creation time as well
+        # You might need 'expansions': 'author_id' and 'tweet.fields': 'created_at' for more context
+        response = client.get_tweet(tweet_id, tweet_fields=["created_at", "public_metrics", "author_id"])
+
+        if response.data:
+            tweet = response.data
+            # Fetch user details for the author ID
+            user_response = client.get_user(id=tweet.author_id)
+            username = user_response.data.username if user_response.data else "unknown_user"
+            tweet_text = f"@{username} ({tweet.created_at}): {tweet.text}"
+            console.print(f"Successfully fetched tweet: {tweet.id}")
+        else:
+            # Handle cases where the tweet might be deleted, private, or ID invalid
+            error_detail = "Unknown reason."
+            if response.errors:
+                error_detail = "; ".join([e.get('detail', str(e)) for e in response.errors])
+            error_message = f"Tweepy could not find or access tweet ID: {tweet_id}. Reason: {error_detail}"
+            console.print(error_message, style="red")
+
+    except tweepy.errors.TweepyException as e:
+        console.print(f"Tweepy API error for URL {url}: {e}", style="red bold")
+        error_message = f"Error: A Tweepy API error occurred: {e}"
+    except ValueError as e: # Catch the ID extraction error
+        console.print(f"Error processing Twitter URL {url}: {e}", style="red bold")
+        error_message = f"Error: {e}"
+    except Exception as e:
+        console.print(f"Unexpected error getting content from Twitter/X URL {url} using tweepy: {e}", style="red bold")
+        error_message = f"Error: An unexpected error occurred while getting Twitter/X content via tweepy. {e}"
+
+    return {
+        "content_type": content_type,
+        "content": tweet_text.strip(),
         "error": error_message
     }
 
@@ -145,6 +239,7 @@ def build_graph():
     # Add nodes
     workflow.add_node("init", init_state)
     workflow.add_node("web_extractor", get_web_content)
+    workflow.add_node("twitter_extractor", get_twitter_content)
     workflow.add_node("pdf_handler", handle_pdf_content)
     workflow.add_node("summarizer", summarize_content)
 
@@ -157,12 +252,14 @@ def build_graph():
         route_content_type,
         {
             "web_extractor": "web_extractor",
+            "twitter_extractor": "twitter_extractor",
             "pdf_handler": "pdf_handler",
         }
     )
 
     # Connect nodes
     workflow.add_edge("web_extractor", "summarizer")
+    workflow.add_edge("twitter_extractor", "summarizer")
     workflow.add_edge("pdf_handler", "summarizer")
     workflow.add_edge("summarizer", END)
 
@@ -174,8 +271,8 @@ def build_graph():
 graph = build_graph()
 
 # --- Main Agent Function --- 
-def run_agent(url: str) -> str:
-    """Runs the LangGraph agent workflow."""
+def run_agent(url: str) -> str | None:
+    """Runs the LangGraph agent workflow. Returns summary on success, None otherwise."""
     console.print(f"--- Starting Agent for message: '{url[:50]}...' ---", style="bold blue")
     original_message  = f"Please summarize this link: {url}"
     initial_state = {"original_message": original_message, "url": url}
@@ -186,17 +283,17 @@ def run_agent(url: str) -> str:
         console.print("--- Agent Finished ---", style="bold blue")
         if final_state.get('error'):
             console.print(f"Agent finished with error: {final_state['error']}", style="bold red")
-            return f"Error: {final_state['error']}"
+            return None
         elif final_state.get('summary'):
             console.print(f"Agent finished with summary: {final_state['summary'][:100]}...", style="green")
             return final_state['summary']
         else:
             console.print("Agent finished but no summary or error was produced.", style="yellow")
-            return "Processing complete, but no summary was generated."
+            return None
 
     except Exception as e:
         console.print(f"Unhandled exception in agent execution: {e}", style="bold red")
-        return f"An unexpected error occurred: {e}"
+        return None
 
 # Example usage (for testing)
 if __name__ == "__main__":

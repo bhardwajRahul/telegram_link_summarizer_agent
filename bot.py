@@ -71,8 +71,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Pass the original message text to the agent, as it might contain context/query
     # Or just pass the URL if the agent's start_node is designed for that
     # Current agent.run_agent expects the full message text
+    summary_or_error = None # Initialize
     try:
-        summary_or_error = run_agent(text) 
+        # Run the agent. Expecting a summary string on success,
+        # or potentially None/empty string/error string on failure within the agent.
+        summary_or_error = run_agent(text)
+
+        # Check if the agent indicated an error or returned no summary
+        if not summary_or_error:
+            logger.warning(f"Agent returned no summary or indicated an error for chat {chat_id} and URL {url}. No reply sent.")
+            # Optionally, log the specific error if the agent returns it distinctly
+            # if isinstance(summary_or_error, str) and summary_or_error.startswith("Error:"):
+            #     logger.error(f"Agent error for chat {chat_id}: {summary_or_error}")
+            return # Exit without sending a message
 
         # Escape HTML characters in the result to prevent formatting issues
         # Limit message length to Telegram's max (4096 chars)
@@ -81,15 +92,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if len(escaped_result) > MAX_LEN:
             escaped_result = escaped_result[:MAX_LEN-10] + "... (truncated)"
 
-        # Send the result back
-        # Consider using message threads if available/appropriate
+        # Send the result back ONLY if successful
         await message.reply_text(escaped_result, parse_mode=ParseMode.HTML)
-        logger.info(f"Sent summary/error back to chat {chat_id}")
+        logger.info(f"Sent summary back to chat {chat_id}")
 
     except Exception as e:
-        logger.error(f"Error handling message for chat {chat_id}: {e}", exc_info=True)
-        error_message = f"Sorry, an error occurred: {html.escape(str(e))}"
-        await message.reply_text(error_message[:4096], parse_mode=ParseMode.HTML)
+        # Log any exception during agent execution or message handling
+        logger.error(f"Error handling message for chat {chat_id} (URL: {url}): {e}", exc_info=True)
+        # DO NOT send an error message back to the chat per user request
+        # error_message = f"Sorry, an error occurred: {html.escape(str(e))}"
+        # await message.reply_text(error_message[:4096], parse_mode=ParseMode.HTML)
 
 # --- FastAPI Lifespan Management (Setup/Teardown) ---
 @asynccontextmanager
@@ -177,6 +189,20 @@ async def health_check():
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8080"))
-
-    logger.info(f"Starting Uvicorn server on {host}:{port}...")
-    uvicorn.run(app, host=host, port=port)
+    
+    # Check if we should run in polling mode (for local testing without webhook)
+    use_polling = os.getenv("USE_POLLING", "false").lower() == "true"
+    
+    if use_polling:
+        logger.info("Starting bot in polling mode...")
+        # Register the message handler
+        url_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message)
+        ptb_app.add_handler(url_handler)
+        
+        # Start the bot in polling mode
+        logger.info("Starting polling...")
+        ptb_app.run_polling()
+    else:
+        # Run in webhook mode with FastAPI
+        logger.info(f"Starting Uvicorn server on {host}:{port}...")
+        uvicorn.run(app, host=host, port=port)

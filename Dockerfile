@@ -20,5 +20,5 @@ EXPOSE 8080
 
 # Specify the command to run on container start using Uvicorn
 # Runs the FastAPI app defined as 'app' in the 'bot.py' module
-# Use bash -c to allow environment variable substitution for PORT
-CMD bash -c 'uvicorn bot:app --host 0.0.0.0 --port $PORT'
+# Use bash -c to allow environment variable substitution for PORT, defaulting to 8080
+CMD bash -c 'uvicorn bot:app --host 0.0.0.0 --port ${PORT:-8080}'

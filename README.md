@@ -9,12 +9,14 @@ An agentic Telegram bot designed to summarize web links (articles, papers, etc.)
 *   **Link Summarization:** Extracts content from URLs and provides summaries.
 *   **Web Search Integration:** Uses Tavily Search to gather context if needed.
 *   **PDF Support:** Can process and summarize PDF documents found at URLs.
+*   **Twitter/X Support:** Fetches tweet content using Tweepy.
 *   **Agentic Workflow:** Leverages LangGraph for a multi-step reasoning process.
 *   **BAML Integration:** Uses BAML for structured output generation.
 *   **Telegram Bot Interface:** Interacts via a simple Telegram bot.
 
 ## 🛠️ Tech Stack
 
+*   **Twitter/X API:** Tweepy
 *   **Orchestration:** LangGraph
 *   **LLM Interaction/Structured Output:** BAML (Boundary)
 *   **Telegram Bot:** `python-telegram-bot`
@@ -31,19 +33,40 @@ An agentic Telegram bot designed to summarize web links (articles, papers, etc.)
     cd telegram_link_summarizer_agent
     ```
 
-2.  **Install Dependencies (using [`uv`](https://github.com/astral-sh/uv))**
-    *   You can use [`uv`](https://github.com/astral-sh/uv) to install dependencies:
+2.  **Install Dependencies (using [`uv`](https://github.com/astral-sh/uv) or `pip`))**
+    *   You can use [`uv`](https://github.com/astral-sh/uv) or standard `pip`:
         ```bash
-        uv sync
+        # Using uv
+        uv pip install .
+
+        # Or using pip
+        pip install .
         ```
 
-3.  **Configure Environment Variables:**
-    *   Create a `.env` file in the root directory and put your credentials there.   
-    *   Fill in the required API keys and tokens in your `.env` file:
-        *   `TELEGRAM_BOT_TOKEN`: Your Telegram Bot token from BotFather.
-        *   `TAVILY_API_KEY`: Your Tavily Search API key.
-        *   `GEMINI_API_KEY`: API key for the LLM used by BAML.
-        *   *(Add any other keys required by `config.py`)*
+3.  **Set up Environment Variables:**
+    Create a file named `.env` in the project root directory. Add the following environment variables with your actual values:
+    ```env
+    # API Keys for Language Models and Tools
+    GEMINI_API_KEY="your_gemini_api_key"
+    DEEPSEEK_API_KEY="your_deepseek_api_key"
+    TAVILY_API_KEY="your_tavily_api_key"
+    X_BEARER_TOKEN="your_twitter_v2_bearer_token" # Needed for fetching tweets
+
+    # Telegram Bot Configuration
+    TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
+
+    # Webhook Configuration (Needed for local testing with ngrok or deployment)
+    # For ngrok, use the https://<your-ngrok-subdomain>.ngrok-free.app URL
+    # For deployment, this isn't strictly needed in the .env for the *deployed* app,
+    # but the deployment script will set the webhook based on the Cloud Run URL.
+    WEBHOOK_URL="your_webhook_url_or_ngrok_url"
+
+    # Secure your webhook (generate strong random strings for these)
+    TELEGRAM_WEBHOOK_SECRET_TOKEN="your_strong_random_secret_token"
+    # Example: /webhook/aBcDeF12345 - must start with a slash!
+    WEBHOOK_SECRET_PATH="/your_unique_and_random_webhook_path"
+    ```
+    **Important:** Keep your `.env` file secure and do not commit it to version control. The `.gitignore` file should already include `.env`.
 
 ## ▶️ Usage
 
@@ -83,15 +106,19 @@ This will open marimo and you can run and visualize the agent graph flow.
 
 ## Local Running
 
-This runs the FastAPI server directly. Note that without a publicly accessible `WEBHOOK_URL`, the bot will not receive messages from Telegram.
+This runs the FastAPI server directly using `uvicorn`. Note that without a publicly accessible `WEBHOOK_URL` set in your `.env` file (e.g., using ngrok), the bot will not receive messages from Telegram when run locally this way.
+
+Make sure you have installed dependencies (`uv sync`) and configured your `.env` file.
 
 ```bash
-uvicorn bot:app --host 0.0.0.0 --port 8080 --reload
+# Make the script executable (only needed once)
+chmod +x ./scripts/run_local.sh
+
+# Run the local server
+./scripts/run_local.sh
 ```
 
 You can check if the server is running by accessing the health check endpoint: `curl http://localhost:8080/health`
-
-To test receiving actual Telegram messages locally, you'll need a tool like `ngrok` to create a public tunnel to your `localhost:8080` and set the ngrok URL as `WEBHOOK_URL` in your `.env` file.
 
 ## Testing Webhooks Locally with ngrok
 
@@ -99,7 +126,7 @@ When running your bot locally, Telegram cannot reach your computer directly beca
 
 ### Steps
 
-1. **Install ngrok:**
+1.  **Install ngrok:**
    - Download from https://ngrok.com/download or install via your package manager.
    - On macOS (Homebrew):
      ```bash
@@ -111,12 +138,15 @@ When running your bot locally, Telegram cannot reach your computer directly beca
      ```
    - On Windows: Download and extract the executable from the website.
 
-2. **Start your local server:**
+2.  **Start your local server:**
    ```bash
-   uvicorn bot:app --host 0.0.0.0 --port 8080 --reload
+   # Ensure the script is executable
+   chmod +x ./scripts/run_local.sh
+   # Run the local server
+   ./scripts/run_local.sh
    ```
 
-3. **Start ngrok to expose port 8080:**
+3.  **Start ngrok to expose port 8080:**
    ```bash
    ngrok http 8080
    ```
@@ -126,44 +156,122 @@ When running your bot locally, Telegram cannot reach your computer directly beca
      ```
    - Copy the HTTPS URL provided by ngrok (e.g., `https://abcd-1234.ngrok-free.app`).
 
-4. **Update your `.env` file:**
+4.  **Update your `.env` file:**
    - Set the `WEBHOOK_URL` to the ngrok HTTPS URL:
      ```env
-     WEBHOOK_URL=https://abcd-1234.ngrok-free.app
+     WEBHOOK_URL=https://your-ngrok-url.ngrok-free.app
      ```
    - Save the file.
 
-5. **Restart your local server:**
-   - Stop the running `uvicorn` process (Ctrl+C) and start it again:
+5.  **Restart your local server:**
+   - Stop the running `./scripts/run_local.sh` process (Ctrl+C) and start it again:
      ```bash
-     uvicorn bot:app --host 0.0.0.0 --port 8080 --reload
+     ./scripts/run_local.sh
      ```
-   - On startup, the bot will register the webhook with Telegram using your public ngrok URL.
+   - On startup, the bot should attempt to register the webhook with Telegram using your public ngrok URL (if `bot.py` is configured to do so based on `WEBHOOK_URL`).
 
-6. **Test your bot:**
+6.  **Test your bot:**
    - Send a message with a link to your Telegram bot as usual.
    - Telegram will send the update to your ngrok public URL, which forwards it to your local server.
    - You should see logs in your terminal and receive a response from your local bot.
 
 **Tip:** If you restart ngrok, you will get a new public URL. Update your `.env` and restart the server each time.
 
-**Security Note:** For production, always use a secret path and/or secret token for your webhook endpoint. For local testing, the default `/webhook` is sufficient, but you can configure a custom path using the `WEBHOOK_SECRET_PATH` variable.
+**Security Note:** For production, always use a secret path (`WEBHOOK_SECRET_PATH`) and a secret token (`TELEGRAM_WEBHOOK_SECRET_TOKEN`) for your webhook endpoint. For local ngrok testing, ensure these variables are also set in your `.env` if your `bot.py` requires them even locally.
 
 ## Docker Testing
 
-1.  **Build the Docker Image:**
+This builds the Docker image and runs the container locally. Ensure your `.env` file is present and configured in the project root.
+
+```bash
+# Make the script executable (only needed once)
+chmod +x ./scripts/run_docker.sh
+
+# Build and run the Docker container
+./scripts/run_docker.sh
+```
+
+You can check the health endpoint at `http://localhost:8080/health`
+
+### Testing Docker Locally with ngrok
+
+You can also test the Docker container with ngrok to receive real Telegram messages:
+
+1.  **Run the Docker Container:**
     ```bash
-    docker build -t telegram-summarizer .
+    # Ensure script is executable
+    chmod +x ./scripts/run_docker.sh
+    # Build and run the container (loads .env)
+    ./scripts/run_docker.sh 
     ```
-2.  **Run the Docker Container:** (Ensure your `.env` file is in the current directory)
+    *(Leave this terminal running)*
+
+2.  **Start ngrok:** In a *new* terminal, run:
     ```bash
-    docker run -p 8080:8080 --rm --name summarizer-bot --env-file .env telegram-summarizer
+    ngrok http 8080 
     ```
-    You can check the health endpoint at `http://localhost:8080/health`
+    Copy the HTTPS URL provided by ngrok.
+
+3.  **Update `.env`:** Set the `WEBHOOK_URL` variable in your `.env` file to the ngrok HTTPS URL.
+
+4.  **Restart Docker Container:** Stop the running container (Ctrl+C in the first terminal, or `docker stop summarizer-bot`) and restart it using:
+    ```bash
+    ./scripts/run_docker.sh
+    ```
+    This ensures the container picks up the new `WEBHOOK_URL` from the `.env` file.
+
+5.  **Test:** Send messages to your bot. They should be routed through ngrok to your running Docker container.
 
 ## Deploying to Google Cloud Run
 
 This guide assumes you have a GCP account, `gcloud` CLI installed and configured, and Docker installed.
+
+The deployment process involves:
+1.  **Setting up Secrets:** Securely store your API keys and tokens in Google Cloud Secret Manager.
+2.  **Building & Pushing Image:** Build the Docker image and push it to Google Artifact Registry.
+3.  **Deploying Service:** Deploy the image to Cloud Run, mapping the secrets to environment variables.
+4.  **Setting Webhook:** Configure the Telegram webhook to point to your Cloud Run service URL.
+
+We have provided scripts to streamline this process.
+
+### 1. Setup Secrets
+
+This script helps you create secrets in Google Cloud Secret Manager and add your sensitive values (API keys, tokens).
+
+**IMPORTANT:** Before running, you **must** edit the `SECRETS` array inside `scripts/setup_secrets.sh` to include the *exact names* of the environment variables defined in your `.env` file (e.g., `TELEGRAM_BOT_TOKEN`, `TAVILY_API_KEY`, etc.).
+
+```bash
+# Make the script executable (only needed once)
+chmod +x ./scripts/setup_secrets.sh
+
+# Run the secret setup script (it will prompt for project ID and secret values)
+./scripts/setup_secrets.sh
+```
+
+Follow the prompts to enter your GCP Project ID (if not already configured) and the values for each secret.
+
+### 2. Deploy to Cloud Run
+
+This script automates building the image, pushing it to Artifact Registry, deploying to Cloud Run, and setting the Telegram webhook.
+
+**IMPORTANT:** Before running, you **must** edit the `SECRETS_TO_MAP` array inside `scripts/deploy_cloud_run.sh`. This array defines how the secrets you created in Secret Manager map to environment variables in your Cloud Run service. Ensure the secret names match those used in `setup_secrets.sh`.
+
+```bash
+# Make the script executable (only needed once)
+chmod +x ./scripts/deploy_cloud_run.sh
+
+# Run the deployment script (it will prompt for configuration)
+./scripts/deploy_cloud_run.sh
+```
+
+The script will prompt you for your GCP Project ID, Region, Service Name, and Artifact Registry Repository Name if they are not set as environment variables. It will then guide you through the build, push, and deployment process, including setting the Telegram webhook automatically if it can find your `TELEGRAM_BOT_TOKEN` secret mapping.
+
+### Manual Steps (If needed)
+
+If you prefer to run the steps manually or need to troubleshoot, the original commands are detailed below. The deployment script automates these.
+
+<details>
+<summary>Click to view manual gcloud commands</summary>
 
 1.  **Set Environment Variables (Shell):**
     ```bash
@@ -192,137 +300,90 @@ This guide assumes you have a GCP account, `gcloud` CLI installed and configured
     gcloud auth configure-docker ${REGION}-docker.pkg.dev
     ```
 5.  **Manage Secrets with Secret Manager (Recommended):**
-    Store API keys and tokens securely using Google Cloud Secret Manager. You can use the `gcloud` CLI:
+    Store API keys and tokens securely using Google Cloud Secret Manager. Use the `gcloud` CLI (as done by `setup_secrets.sh`):
 
     *   **Create Secret:** (Do this once per secret, e.g., `telegram-bot-token`, `tavily-api-key`)
         ```bash
+        # Example for bot token
         gcloud secrets create telegram-bot-token --replication-policy="automatic"
+        # Example for Tavily key
         gcloud secrets create tavily-api-key --replication-policy="automatic"
-        gcloud secrets create telegram-webhook-secret-token --replication-policy="automatic" # For verifying requests *from* Telegram
-        gcloud secrets create webhook-secret-path --replication-policy="automatic"           # For the URL path the bot listens *on*
-        gcloud secrets create deepseek-api-key --replication-policy="automatic"
-        gcloud secrets create gemini-api-key --replication-policy="automatic"
-        # Add others as needed (e.g., openai-api-key)
+        # Add others as needed...
         ```
-    *   **Add Secret Value:** (Use stdin for security)
-        Generate your secret strings (e.g., using `openssl rand -hex 32`). You can use the same string for both or different ones (recommended).
+
+    *   **Add Secret Version (Add the actual value):**
         ```bash
-        echo "Adding Telegram Bot Token: Paste token then Ctrl+D"
-        gcloud secrets versions add telegram-bot-token --data-file=-
+        # Example for bot token - you will be prompted for the value
+        printf "YOUR_ACTUAL_TELEGRAM_BOT_TOKEN" | gcloud secrets versions add telegram-bot-token --data-file=-
 
-        echo "Adding Tavily API Key: Paste key then Ctrl+D"
-        gcloud secrets versions add tavily-api-key --data-file=-
-        
-        echo "Adding Telegram Webhook Secret Token (for verification): Paste your chosen secret string then Ctrl+D"
-        gcloud secrets versions add telegram-webhook-secret-token --data-file=-
-        
-        echo "Adding Webhook Secret Path (for URL): Paste your chosen secret string then Ctrl+D"
-        gcloud secrets versions add webhook-secret-path --data-file=-
-
-        echo "Adding DeepSeek API Key: Paste key then Ctrl+D"
-        gcloud secrets versions add deepseek-api-key --data-file=-
-
-        echo "Adding Gemini API Key: Paste key then Ctrl+D"
-        gcloud secrets versions add gemini-api-key --data-file=-
-        
-        # Add versions for other secrets...
-        ```
-    *   **Grant Access to Cloud Run Service Account:** (Find `PROJECT_NUMBER` with `gcloud projects describe $PROJECT_ID --format='value(projectNumber)'`)
-        ```bash
-        PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
-        GCP_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-
-        gcloud secrets add-iam-policy-binding telegram-bot-token \
-          --member="serviceAccount:${GCP_SERVICE_ACCOUNT}" \
-          --role="roles/secretmanager.secretAccessor"
-          
-        gcloud secrets add-iam-policy-binding tavily-api-key \
-          --member="serviceAccount:${GCP_SERVICE_ACCOUNT}" \
-          --role="roles/secretmanager.secretAccessor"
-          
-        gcloud secrets add-iam-policy-binding telegram-webhook-secret-token \
-          --member="serviceAccount:${GCP_SERVICE_ACCOUNT}" \
-          --role="roles/secretmanager.secretAccessor"
-          
-        gcloud secrets add-iam-policy-binding webhook-secret-path \
-          --member="serviceAccount:${GCP_SERVICE_ACCOUNT}" \
-          --role="roles/secretmanager.secretAccessor"
-          
-        gcloud secrets add-iam-policy-binding deepseek-api-key \
-          --member="serviceAccount:${GCP_SERVICE_ACCOUNT}" \
-          --role="roles/secretmanager.secretAccessor"
-          
-        gcloud secrets add-iam-policy-binding gemini-api-key \
-          --member="serviceAccount:${GCP_SERVICE_ACCOUNT}" \
-          --role="roles/secretmanager.secretAccessor"
-          
-        # Add bindings for DeepSeek, Gemini, etc.
+        # Example for Tavily key - you will be prompted for the value
+        printf "YOUR_ACTUAL_TAVILY_API_KEY" | gcloud secrets versions add tavily-api-key --data-file=-
+        # Add others as needed...
         ```
 
-6.  **Build and Push Image using Cloud Build:**
+6.  **Build and Push Docker Image:**
     ```bash
-    gcloud builds submit --tag $IMAGE_NAME .
+    # Build
+    docker build -t $IMAGE_NAME .
+    # Push
+    docker push $IMAGE_NAME
     ```
-7.  **Initial Deploy to Cloud Run (Setting Secrets):**
-    *   **Public Access:** The `--allow-unauthenticated` flag is **required** for Telegram webhooks to reach your service. See the Security section below.
-    *   **Secrets:** Use `--set-secrets` to securely mount secrets from Secret Manager as environment variables.
 
+7.  **Deploy to Cloud Run:**
+    Replace `SECRET_NAME=SECRET_ID:latest,...` with your actual secret mappings.
     ```bash
     gcloud run deploy $SERVICE_NAME \
       --image $IMAGE_NAME \
       --platform managed \
+      --region $REGION \
       --port 8080 \
       --allow-unauthenticated \
-      --set-secrets="TELEGRAM_BOT_TOKEN=telegram-bot-token:latest" \
-      --set-secrets="TAVILY_API_KEY=tavily-api-key:latest" \
-      --set-secrets="TELEGRAM_WEBHOOK_SECRET_TOKEN=telegram-webhook-secret-token:latest" \
-      --set-secrets="WEBHOOK_SECRET_PATH=webhook-secret-path:latest" \
-      --set-secrets="DEEPSEEK_API_KEY=deepseek-api-key:latest" \
-      --set-secrets="GEMINI_API_KEY=gemini-api-key:latest" \
-      --region $REGION \
-      --min-instances 0 # Scale-to-zero
+      --set-secrets=TELEGRAM_BOT_TOKEN=telegram-bot-token:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest,WEBHOOK_SECRET_TOKEN=webhook-secret-token:latest
+      # Add other flags like --cpu, --memory if needed
     ```
-8.  **Get Service URL & Update Deployment with Webhook URL:**
+    **Important:** The service account used by Cloud Run (usually `PROJECT_NUMBER-compute@developer.gserviceaccount.com`) needs the "Secret Manager Secret Accessor" IAM role for the secrets you are mapping.
+
+8.  **Get Service URL & Set Telegram Webhook:**
     ```bash
+    # Get the URL
     SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --platform managed --region $REGION --format 'value(status.url)')
     echo "Service URL: $SERVICE_URL"
+
+    # Get your bot token (replace secret-id if different)
+    TELEGRAM_BOT_TOKEN=$(gcloud secrets versions access latest --secret=telegram-bot-token)
+    # Get your webhook secret (optional, replace secret-id if different)
+    WEBHOOK_SECRET=$(gcloud secrets versions access latest --secret=telegram-webhook-secret-token)
+
+    # Set the webhook (adjust path /webhook if needed)
+    curl -F "url=${SERVICE_URL}/webhook" \
+         -F "secret_token=${WEBHOOK_SECRET}" \
+         https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook
     ```
- 
+
+</details>
+
+## ☁️ Deployment
+
+### 1. Run the Setup Secrets Script:
+    This script will guide you to create the necessary secrets in Google Cloud Secret Manager if they don't already exist.
     ```bash
-    gcloud run deploy $SERVICE_NAME \
-      --image $IMAGE_NAME \
-      --platform managed \
-      --port 8080 \
-      --allow-unauthenticated \
-      --update-env-vars="WEBHOOK_URL=${SERVICE_URL}" \
-      --update-secrets="TELEGRAM_WEBHOOK_SECRET_TOKEN=telegram-webhook-secret-token:latest" \
-      --update-secrets="WEBHOOK_SECRET_PATH=webhook-secret-path:latest" \
-      --update-secrets="DEEPSEEK_API_KEY=deepseek-api-key:latest" \
-      --update-secrets="GEMINI_API_KEY=gemini-api-key:latest" \
-      --region $REGION
+    # Make executable (if needed)
+    chmod +x ./scripts/setup_secrets.sh
+    # Run the script
+    ./scripts/setup_secrets.sh
     ```
- 
-### Securing the Public Endpoint
+    Follow the prompts to provide your API keys and tokens.
 
-Since the service uses `--allow-unauthenticated`, it's crucial to secure it. We use two methods:
+### 2. Run the Deployment Script:
+    This script handles building the Docker image, pushing it to Google Artifact Registry, and deploying it to Cloud Run with the correct secret configuration and webhook setup.
+    ```bash
+    # Make executable (if needed)
+    chmod +x ./scripts/deploy_cloud_run.sh
+    # Run the script
+    ./scripts/deploy_cloud_run.sh
+    ```
+    The script will prompt you for necessary information like GCP Project ID, Region, Service Name, etc.
 
-1.  **Webhook Secret Token (`TELEGRAM_WEBHOOK_SECRET_TOKEN`):** Verifies incoming requests *are from* Telegram using the `X-Telegram-Bot-Api-Secret-Token` header.
-2.  **Secret URL Path (`WEBHOOK_SECRET_PATH`):** Makes the endpoint URL path unpredictable (e.g., `https://.../your-secret-path` instead of `https://.../webhook`). The bot listens *only* on this path.
+## License
 
-Implement these using environment variables set via Secret Manager:
-
-Steps:
-
-*   # 1. Generate strong random secret strings (use different ones for better security):
-    #    SECRET_TOKEN_VALUE=$(openssl rand -hex 32)
-    #    SECRET_PATH_VALUE=$(openssl rand -hex 32)
-    #    echo "Webhook Secret Token: ${SECRET_TOKEN_VALUE}" # Save securely!
-    #    echo "Webhook Secret Path:  ${SECRET_PATH_VALUE}" # Save securely!
-*   # 2. Add these values to the secrets created earlier in the main deployment steps:
-    #    echo ${SECRET_TOKEN_VALUE} | gcloud secrets versions add telegram-webhook-secret-token --data-file=-
-    #    echo ${SECRET_PATH_VALUE}  | gcloud secrets versions add webhook-secret-path --data-file=-
-*   # 3. Ensure the service account has access (as shown in the main deployment steps).
-*   # 4. Ensure the bot.py code uses WEBHOOK_SECRET_PATH when registering the webhook
-    #    and verifies TELEGRAM_WEBHOOK_SECRET_TOKEN on incoming requests (next step).
-
-Your bot should now be running on Cloud Run, have its webhook set with Telegram, and be secured against unauthorized requests.
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
