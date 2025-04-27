@@ -362,28 +362,6 @@ If you prefer to run the steps manually or need to troubleshoot, the original co
 
 </details>
 
-## ☁️ Deployment
-
-### 1. Run the Setup Secrets Script:
-    This script will guide you to create the necessary secrets in Google Cloud Secret Manager if they don't already exist.
-    ```bash
-    # Make executable (if needed)
-    chmod +x ./scripts/setup_secrets.sh
-    # Run the script
-    ./scripts/setup_secrets.sh
-    ```
-    Follow the prompts to provide your API keys and tokens.
-
-### 2. Run the Deployment Script:
-    This script handles building the Docker image, pushing it to Google Artifact Registry, and deploying it to Cloud Run with the correct secret configuration and webhook setup.
-    ```bash
-    # Make executable (if needed)
-    chmod +x ./scripts/deploy_cloud_run.sh
-    # Run the script
-    ./scripts/deploy_cloud_run.sh
-    ```
-    The script will prompt you for necessary information like GCP Project ID, Region, Service Name, etc.
-
 ## License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
