@@ -263,11 +263,10 @@ def fallback_scrape(state: AgentState) -> AgentState:
     }
 
 def summarize_content(state: AgentState) -> AgentState:
-    """Summarizes the extracted content using BAML."""
+    """Summarizes the extracted content using BAML, preserving screenshot state."""
     print(f"--- Debug: summarize_content received state: { {k: (type(v), len(v) if isinstance(v, (str, bytes)) else v) for k, v in state.items()} } ---")
     console.print("---SUMMARIZE CONTENT---", style="bold green")
-    
-    # Determine which content to use (primary or fallback)
+
     content_to_summarize = state.get('content')
     source = "primary content"
 
@@ -276,16 +275,21 @@ def summarize_content(state: AgentState) -> AgentState:
         source = "fallback content"
 
     if not content_to_summarize:
-        print("--- Debug: No content found (primary or fallback) for summarization. Skipping. ---")
+        print("--- Debug: No content found for summarization. Preserving screenshot state. ---")
         console.print("No content available to summarize.", style="yellow")
-        # Return state unchanged if no content; error handling might be better
-        return {"summary": "", "error": state.get("error") or "No content found to summarize."} # Keep existing error or add new one
+        # Preserve screenshot, update error
+        return {
+            "summary": "",
+            "error": state.get("error") or "No content found to summarize.",
+            "screenshot_bytes": state.get("screenshot_bytes"), # Preserve screenshot
+            # No need to explicitly preserve fallback_content here if it wasn't found
+        }
 
     print(f"--- Debug: Summarizing {len(content_to_summarize)} chars from {source} ---")
 
     url = state.get('url', 'Unknown URL')
-    # Call BAML client to summarize
     try:
+        # Use get with default for content_type just in case
         summary_result: Summary = b.SummarizeContent(
             content=content_to_summarize,  # Use the content we selected above
             content_type=state['content_type'],
@@ -299,19 +303,28 @@ def summarize_content(state: AgentState) -> AgentState:
         formatted_summary = f"# {title}\n\n"
         formatted_summary += "## Key Points:\n"
         for point in points:
-            # Basic cleanup: strip whitespace from each point
             formatted_summary += f"- {point.strip()}\n"
         formatted_summary += f"\n## Summary:\n{summary.strip()}"
-        # Clean up potential multiple newlines or leading/trailing whitespace in the final string
         formatted_summary = re.sub(r'\n\s*\n', '\n\n', formatted_summary).strip()
 
-        return {"summary": formatted_summary, "error": None}
+        # SUCCESS CASE: Return summary and preserve screenshot ONLY
+        return {
+            "summary": formatted_summary,
+            "error": None,
+            "screenshot_bytes": state.get("screenshot_bytes") # Preserve screenshot
+            # Don't need fallback_content if summary succeeded
+        }
 
     except Exception as e:
         console.print(f"Error during summarization for {url}: {e}", style="red bold")
         print(f"--- Debug: BAML summarization error: {e} ---")
-        state_update = {"summary": "", "error": f"Summarization failed: {e}"} # Update error
-        return state_update
+        # FAILURE CASE: Return error, preserve screenshot AND fallback content
+        return {
+            "summary": "",
+            "error": f"Summarization failed: {e}",
+            "screenshot_bytes": state.get("screenshot_bytes"), # Preserve screenshot
+            "fallback_content": state.get("fallback_content") # Preserve fallback because summary failed
+        }
 
 # --- Conditional Edges Logic ---
 
