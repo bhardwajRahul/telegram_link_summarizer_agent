@@ -40,8 +40,16 @@ function SummarizeContent(content: string, contentType: ContentType, context: st
 
     Based *only* on the provided Original Content {% if context %}and the Relevant Context{% endif %}, generate the answer.
 
-    Format your response strictly as the 'Summary' class structure. Ensure the title, key points, and summary are distinct and accurately reflect the source material. Do not include any information not present in the provided text or context.
+    Format your response strictly as the 'Summary' class structure. Ensure the title, key points, and summary are distinct and accurately reflect the source material. 
+    Do not include any information not present in the provided text or context.
 
+    # Instructions
+    - If the long is for a paper, you need to explain what the paper is trying to solve and how, in separate sections: 
+      '## What is the problem the paper is trying to solve?'
+      '## How does the paper attempt to solve the problem?'
+    - If it's a blog post or webpage, you have to explain like: 'This post or blog or webpage is about ...'
+    - If it's a github repo, you have to explain like: 'This github repo is about ... and tries to solve .... It uses ...'
+    
     ----
     {{ ctx.output_format}}
   "#
