@@ -5,7 +5,7 @@ import os
 from contextlib import asynccontextmanager 
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, Request 
+from fastapi import FastAPI, Request, Response, HTTPException, Header, APIRouter 
 import uvicorn 
 
 from telegram import Update
@@ -104,10 +104,12 @@ async def lifespan(app: FastAPI):
         logger.info(f"Setting webhook to: {full_webhook_url}")
         try:
             await ptb_app.initialize() 
+            full_webhook_url = f"{WEBHOOK_URL.rstrip('/')}/{WEBHOOK_SECRET_PATH.lstrip('/')}"
+            logger.info(f"Setting webhook for URL: {full_webhook_url}")
             await ptb_app.bot.set_webhook(
-                url=full_webhook_url,
-                allowed_updates=Update.ALL_TYPES,
-                secret_token=os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN") 
+                url=full_webhook_url, 
+                secret_token=os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN"),
+                allowed_updates=Update.ALL_TYPES # Optional: specify which updates you want
             )
             await ptb_app.start() 
             logger.info("Webhook set successfully.")
@@ -142,8 +144,18 @@ app = FastAPI(lifespan=lifespan)
 
 # --- Webhook Endpoint ---
 @app.post(f"/{WEBHOOK_SECRET_PATH}")
-async def telegram_webhook(request: Request):
-    """Handle incoming Telegram updates via webhook."""
+async def webhook(
+    request: Request, 
+    secret_token: str | None = Header(None, alias="X-Telegram-Bot-Api-Secret-Token") # Add this parameter
+) -> Response:
+    """Handles incoming Telegram updates via webhook."""
+    # --- Webhook Secret Token Verification ---
+    TELEGRAM_WEBHOOK_SECRET_TOKEN = os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN")
+    if TELEGRAM_WEBHOOK_SECRET_TOKEN and secret_token != TELEGRAM_WEBHOOK_SECRET_TOKEN:
+         logger.warning("Invalid secret token received.")
+         raise HTTPException(status_code=403, detail="Invalid secret token")
+    # --- End Verification ---
+    
     try:
         update_data = await request.json()
         update = Update.de_json(update_data, ptb_app.bot)
@@ -157,6 +169,8 @@ async def telegram_webhook(request: Request):
 # --- Health Check Endpoint (Good Practice) ---
 @app.get("/health")
 async def health_check():
+    """Basic health check endpoint."""
+    logger.info("Health check endpoint called.")
     return {"status": "ok"}
 
 # --- Main Execution Block (for running with uvicorn) ---

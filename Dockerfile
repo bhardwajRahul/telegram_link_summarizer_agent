@@ -7,17 +7,12 @@ WORKDIR /app
 # Install uv
 RUN pip install --no-cache-dir uv
 
-# Install system dependencies if needed (placeholder)
-# RUN apt-get update && apt-get install -y --no-install-recommends some-package && rm -rf /var/lib/apt/lists/*
-
-# Copy only the necessary files for dependency installation first
-COPY pyproject.toml uv.lock* ./
-
-# Install dependencies using uv
-RUN uv pip sync --no-cache --system pyproject.toml
-
-# Copy the rest of the application code into the container at /app
+# Copy the entire application code
 COPY . .
+
+# Install dependencies using uv from pyproject.toml
+# This avoids using the lock file directly which was causing issues
+RUN uv pip install --system .
 
 # Expose the port the app runs on (adjust if your app uses a different port)
 # Cloud Run automatically uses the port defined by the PORT env var (default 8080)
@@ -25,4 +20,5 @@ EXPOSE 8080
 
 # Specify the command to run on container start using Uvicorn
 # Runs the FastAPI app defined as 'app' in the 'bot.py' module
-CMD ["uvicorn", "bot:app", "--host", "0.0.0.0", "--port", "8080"]
+# Use bash -c to allow environment variable substitution for PORT
+CMD bash -c 'uvicorn bot:app --host 0.0.0.0 --port $PORT'

@@ -9,8 +9,7 @@ dependencies = [
     "langgraph>=0.0.57",
     "langchain>=0.2.0",
     "langchain-openai>=0.1.7", # Assuming OpenAI, change if needed
-    "python-telegram-bot[ext]>=21.0", # Added [ext] for extensions
-    "firecrawl-py>=0.0.18",
+    "python-telegram-bot[ext]>=21.0",
     "requests>=2.31.0",
     "beautifulsoup4>=4.12.3",
     "pypdf>=4.2.0",
@@ -26,6 +25,16 @@ dependencies = [
     "pyppeteer>=2.0.0",
     "fastapi>=0.115.12",
     "uvicorn>=0.34.2",
+    "pymupdf>=1.25.5",
+    "click>=8.1.8",
+    "h11>=0.16.0",
+    "starlette>=0.46.2",
+    "pydantic>=2.11.3",
+    "pydantic-core>=2.33.1",
+    "typing-extensions>=4.13.2",
+    "typing-inspection>=0.4.0",
+    "annotated-types>=0.7.0",
+    "anyio>=4.9.0",
 ]
 
 [tool.setuptools]
