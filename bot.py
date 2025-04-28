@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import asyncio
 import re
+import html  # <-- Add this import
 
 from fastapi import FastAPI, Request, Response, HTTPException, Header, APIRouter 
 import uvicorn 
@@ -144,7 +145,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         elif isinstance(agent_result, str):
             # Only text was returned
             logger.info(f"Agent returned only text (len {len(agent_result)} chars). Sending text message.")
-            text_to_send = agent_result
+            
+            # Escape HTML characters to prevent parsing errors using built-in html module
+            text_to_send = html.escape(agent_result)
+            
             # Send text in chunks if too long
             for i in range(0, len(text_to_send), MAX_LEN):
                 chunk = text_to_send[i:i + MAX_LEN]
@@ -157,14 +161,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await message.reply_text("Sorry, I received an unexpected result from the agent.")
 
     except Exception as e:
-        logger.exception("Error handling message:") # Log full traceback
-        # Ensure thinking message is deleted even on error
+        logger.error(f"Error handling message for URL {extracted_url}: {e}", exc_info=True)
+        error_message = f"❌ An error occurred: {e}"
+        try:
+            # Escape the error message for HTML parsing
+            escaped_error_message = html.escape(str(error_message))
+            # Wrap in <pre> tags for preformatted text
+            formatted_error_message = f"<pre>{escaped_error_message}</pre>"
+            # Send potentially long errors in chunks
+            for chunk in [formatted_error_message[i:i + MAX_LEN] for i in range(0, len(formatted_error_message), MAX_LEN)]:
+                await message.reply_text(chunk, parse_mode=ParseMode.HTML)
+        except Exception as send_error:
+            logger.error(f"Failed to send error message to chat {chat_id}: {send_error}", exc_info=True)
+            # Fallback to sending plain text if HTML fails
+            try:
+                # Ensure fallback message is also chunked
+                fallback_msg = f"An error occurred, and I couldn't format the details: {e}"
+                for chunk in [fallback_msg[i:i + MAX_LEN] for i in range(0, len(fallback_msg), MAX_LEN)]:
+                    await message.reply_text(chunk) # Send as plain text
+            except Exception as fallback_send_error:
+                logger.error(f"Failed to send even plain text error message: {fallback_send_error}", exc_info=True)
+    finally:
+        # Delete the 'thinking' message if it exists
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=thinking_message.message_id)
         except Exception as del_e:
             logger.error(f"Failed to delete thinking message: {del_e}")
-        # Send error message to user
-        await message.reply_text(f"Sorry, an error occurred: {e}")
 
 
 # --- FastAPI Lifespan Management (Setup/Teardown) ---

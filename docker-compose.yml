@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: telegram-summarizer-app
+    ports:
+      # Map the container's internal port (defined by PORT or default 8080) to host port 8080
+      - "${PORT:-8080}:${PORT:-8080}" 
+    environment:
+      # Pass environment variables from .env file
+      - PYTHONUNBUFFERED=1 # Ensures logs are shown immediately
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN}
+      - WEBHOOK_SECRET_TOKEN=${WEBHOOK_SECRET_TOKEN}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - FIREWORKS_API_KEY=${FIREWORKS_API_KEY}
+      - PORT=${PORT:-8080} # Port for the FastAPI app
+      - SELENIUM_GRID_URL=http://selenium:4444/wd/hub # Point to the selenium service
+    volumes:
+      - .:/app # Mount the current directory into /app in the container
+    depends_on:
+      - selenium
+    networks:
+      - summarizer-net
+
+  selenium:
+    image: selenium/standalone-chrome:latest # Use the official Selenium Chrome image
+    container_name: selenium-chrome
+    shm_size: 2g # Increase shared memory size
+    ports:
+      - "4444:4444" # Selenium Grid port
+      - "7900:7900" # VNC port (optional, for debugging)
+    networks:
+      - summarizer-net
+
+networks:
+  summarizer-net:
+    driver: bridge

@@ -2,13 +2,14 @@
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import os
-from webdriver_manager.chrome import ChromeDriverManager
+
+# Selenium Grid URL (will be accessible via Docker Compose service name)
+SELENIUM_GRID_URL = os.environ.get("SELENIUM_GRID_URL", "http://selenium:4444/wd/hub")
 
 def find_tweet_article_element(driver):
     """Tries to find the main tweet article container element."""
@@ -26,7 +27,7 @@ def find_tweet_article_element(driver):
         return None
 
 def get_page_screenshot_selenium(url: str, timeout: int = 30) -> bytes | str:
-    """Fetches a full-page screenshot of a URL via Selenium.
+    """Fetches a full-page screenshot of a URL via Selenium Remote WebDriver.
 
     Args:
         url: The URL of the webpage to screenshot.
@@ -38,17 +39,19 @@ def get_page_screenshot_selenium(url: str, timeout: int = 30) -> bytes | str:
     driver = None
     screenshot_bytes = None
     try:
-        print(f"Initializing WebDriver for screenshot for {url}...")
+        print(f"Initializing Remote WebDriver for screenshot for {url} pointing to {SELENIUM_GRID_URL}...")
         chrome_options = Options()
-        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--headless") # Still run headless in the container
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
         
-        # Use webdriver-manager
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Connect to the Remote WebDriver (Selenium Grid)
+        driver = webdriver.Remote(
+            command_executor=SELENIUM_GRID_URL,
+            options=chrome_options
+        )
         driver.set_page_load_timeout(timeout)
         
         print(f"Navigating to {url}...")
@@ -97,7 +100,7 @@ def get_page_screenshot_selenium(url: str, timeout: int = 30) -> bytes | str:
 
 
 def get_page_content_selenium(url: str, timeout: int = 30) -> str:
-    """Fetches the text content of a webpage using Selenium.
+    """Fetches the text content of a webpage using Selenium Remote WebDriver.
 
     Args:
         url: The URL of the webpage to scrape.
@@ -109,17 +112,19 @@ def get_page_content_selenium(url: str, timeout: int = 30) -> str:
     driver = None
     page_text = None
     try:
-        print(f"Initializing WebDriver for Selenium content extraction for {url}...")
+        print(f"Initializing Remote WebDriver for content extraction for {url} pointing to {SELENIUM_GRID_URL}...")
         chrome_options = Options()
-        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--headless") # Still run headless in the container
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu") 
+        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
         
-        # Use webdriver-manager to handle driver installation/update
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Connect to the Remote WebDriver (Selenium Grid)
+        driver = webdriver.Remote(
+            command_executor=SELENIUM_GRID_URL,
+            options=chrome_options
+        )
         driver.set_page_load_timeout(timeout)
         
         print(f"Navigating to {url}...")
