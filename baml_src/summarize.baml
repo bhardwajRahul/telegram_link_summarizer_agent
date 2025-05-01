@@ -19,7 +19,8 @@ function SummarizeContent(content: string, content_type: ContentType, context: s
   // Specifies the client to use for the LLM call. Assumes an 'openai' client is configured in BAML settings.
   // The model used (e.g., gpt-4-turbo-preview) is typically configured in the BAML client settings or passed via environment variables.
   // client Gemini2_5_flash 
-  client DeepSeekV3
+  // client DeepSeekV3
+  client Gemini2_5_flash
 
   // Prompt definition using BAML's syntax
   prompt #"
@@ -49,6 +50,7 @@ function SummarizeContent(content: string, content_type: ContentType, context: s
       '## How does the paper attempt to solve the problem?'
     - If it's a blog post or webpage, you have to explain like: 'This post or blog or webpage is about ...'
     - If it's a github repo, you have to explain like: 'This github repo is about ... and tries to solve .... It uses ...'
+    - If it's an arxive or any other paper, do not mention info about DIO or under process or stuff like that. Just mentione the main points about the paper.
     
     ----
     {{ ctx.output_format}}
