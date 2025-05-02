@@ -49,21 +49,6 @@ def init_state(state: AgentState) -> Dict[str, Any]:
     }
 
 
-def route_content_type(state: AgentState) -> str:
-    """Determines if the URL is a PDF, Twitter/X, or a webpage."""
-    console.print("---ROUTING--- ", style="yellow bold")
-    url = state["url"]
-    if url.lower().endswith(".pdf"):
-        console.print(f"Routing to PDF handler for: {url}", style="blue")
-        return "pdf_extractor"
-    elif re.search(r"https?://(www\.)?(twitter|x)\.com", url, re.IGNORECASE):
-        console.print(f"Routing to Twitter extractor for URL: {url}", style="magenta")
-        return "twitter_extractor"
-    else:
-        console.print(f"Routing to Web extractor for URL: {url}", style="magenta")
-        return "web_extractor"
-
-
 def get_web_content(state: AgentState) -> AgentState:
     """Fetches content from a standard webpage URL using Tavily extract."""
     console.print("---GET WEB CONTENT (Tavily Extract)---", style="yellow bold")
@@ -333,15 +318,15 @@ def build_graph():
     # Define edges
     workflow.set_entry_point("init")
 
-    # Route from init to the correct extractor (or END if init failed)
+    # Route directly from init using the conditional edge
     workflow.add_conditional_edges(
-        "init",
+        "init",  # Edges now originate from init
         route_content_extraction,
         {
             "web_extractor": "web_extractor",
             "pdf_extractor": "pdf_extractor",
             "twitter_extractor": "twitter_extractor",
-            END: END,
+            END: END,  # Handle init errors
         },
     )
 
@@ -463,7 +448,7 @@ if __name__ == "__main__":
     # Twitter/X URL (using the new tool)
     # test_url_msg = "Check out this thread: https://x.com/kargarisaac/status/1808919271263514745"
     test_url_msg = (
-        "Summarize this tweet: https://x.com/omarsar0/status/1917939469103305013?s=52"
+        "Summarize this tweet: https://x.com/natolambert/status/1917928418068541520"
     )
 
     # Standard Web URL (using Tavily)
