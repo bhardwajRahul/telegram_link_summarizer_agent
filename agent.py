@@ -11,6 +11,7 @@ from rich.console import Console
 from tools.search import run_tavily_tool
 from tools.pdf_handler import get_pdf_text
 from tools.twitter_api_tool import fetch_tweet_thread
+from tools.linkedin_scraper_tool import scrape_linkedin_post
 
 load_dotenv()
 
@@ -85,6 +86,8 @@ async def llm_router(state: AgentState) -> Dict[str, Any]:
             decision = "pdf_extractor"
         elif route_result == ExtractorTool.TwitterExtractor:
             decision = "twitter_extractor"
+        elif route_result == ExtractorTool.LinkedInExtractor:
+            decision = "linkedin_extractor"
         elif route_result == ExtractorTool.Unsupported:
             decision = "__unsupported__"
             routing_error = "Unsupported URL type or no URL found by LLM Router."
@@ -206,6 +209,69 @@ def get_twitter_content(state: AgentState) -> AgentState:
         )
         error_message = (
             f"Error: An unexpected error occurred while calling the Twitter tool. {e}"
+        )
+        content_result = ""
+
+    return {
+        **state,
+        "content_type": content_type,
+        "content": content_result.strip(),
+        "error": error_message,
+    }
+
+
+def get_linkedin_content(state: AgentState) -> AgentState:
+    """Fetches content from a LinkedIn post URL using linkedin_scraper_tool."""
+    console.print(
+        "---GET LINKEDIN CONTENT (linkedin_scraper_tool)---", style="yellow bold"
+    )
+    url = state["url"]
+    error_message = None
+    content_result = ""
+    content_type = (
+        ContentType.Webpage
+    )  # LinkedIn posts are treated as webpages for summarization
+
+    # Reset error from previous steps if any
+    state["error"] = None
+
+    try:
+        console.print(f"Fetching LinkedIn post content for URL: {url}", style="cyan")
+        # Use the LinkedIn tool
+        result = scrape_linkedin_post(url)
+
+        # Check if the tool returned an error message (string)
+        if isinstance(result, str) and result.startswith("Error:"):
+            error_message = result
+            console.print(error_message, style="red bold")
+            content_result = ""  # Ensure content is empty if tool errored
+        # Check if the tool returned content (dict)
+        elif isinstance(result, dict) and result.get("content"):
+            content_result = result["content"]
+            source_url = result.get(
+                "source_url"
+            )  # Optional: store source if needed later
+            console.print(
+                f"Successfully fetched LinkedIn content (Source: {source_url}) for: {url}",
+                style="green",
+            )
+            # Ensure content_result is a string
+            if not isinstance(content_result, str):
+                content_result = str(content_result)
+        # Handle unexpected return types or empty success case
+        else:
+            error_message = f"LinkedIn tool returned unexpected result or no content: {type(result)}"
+            console.print(error_message, style="yellow")
+            content_result = ""
+
+    except Exception as e:
+        console.print(
+            f"Unexpected error calling scrape_linkedin_post for {url}: {e}",
+            style="red bold",
+            exc_info=True,  # Include traceback for unexpected errors
+        )
+        error_message = (
+            f"Error: An unexpected error occurred while calling the LinkedIn tool. {e}"
         )
         content_result = ""
 
@@ -368,6 +434,9 @@ def route_based_on_llm(state: AgentState) -> str:
     elif decision == "twitter_extractor":
         console.print(f"LLM Routed to: Twitter Extractor", style="magenta")
         return "twitter_extractor"
+    elif decision == "linkedin_extractor":
+        console.print(f"LLM Routed to: LinkedIn Extractor", style="magenta")
+        return "linkedin_extractor"
     elif decision == "__unsupported__":
         console.print("LLM Routed to: Unsupported -> END", style="yellow")
         # Error message should already be set by the router node
@@ -425,6 +494,7 @@ def build_graph():
     workflow.add_node("web_extractor", get_web_content)
     workflow.add_node("pdf_extractor", handle_pdf_content)
     workflow.add_node("twitter_extractor", get_twitter_content)
+    workflow.add_node("linkedin_extractor", get_linkedin_content)
     workflow.add_node("summarize_content", summarize_content)
 
     # Define edges
@@ -441,6 +511,7 @@ def build_graph():
             "web_extractor": "web_extractor",
             "pdf_extractor": "pdf_extractor",
             "twitter_extractor": "twitter_extractor",
+            "linkedin_extractor": "linkedin_extractor",
             END: END,  # Handles errors and unsupported cases from the router
         },
     )
@@ -464,6 +535,14 @@ def build_graph():
     )
     workflow.add_conditional_edges(
         "twitter_extractor",
+        should_summarize,
+        {
+            "summarize_content": "summarize_content",
+            END: END,
+        },
+    )
+    workflow.add_conditional_edges(
+        "linkedin_extractor",
         should_summarize,
         {
             "summarize_content": "summarize_content",
@@ -594,6 +673,8 @@ if __name__ == "__main__":
     test_url_msg_fail = (
         "What about this? https://httpbin.org/delay/5"  # Example, Tavily might timeout
     )
+    # LinkedIn URL
+    test_url_msg_linkedin = "Summarize this post: https://www.linkedin.com/posts/omarsar_llms-for-engineering-activity-7324064951734603776-Ravc?utm_source=share&utm_medium=member_desktop&rcm=ACoAABDFOm0BmXlu4cLYtJePo0mLzdFoB5itUNU"
     # Message without a URL (Router should pick Unsupported)
     test_url_msg_nourl = "Hello, how are you?"
     # Unsupported URL Type (Router should pick Unsupported)
@@ -605,6 +686,7 @@ if __name__ == "__main__":
             "Web": test_url_msg_web,
             "PDF": test_url_msg_pdf,
             # "Web Fail": test_url_msg_fail, # May take time
+            "LinkedIn": test_url_msg_linkedin,
             "No URL": test_url_msg_nourl,
             "Unsupported FTP": test_url_msg_unsupported,
         }
