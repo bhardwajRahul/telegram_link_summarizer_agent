@@ -84,23 +84,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 f"Agent returned valid summary (len {len(agent_result)} chars). Preparing message."
             )
 
-            # Combine URL and result
-            text_to_send_raw = f"{extracted_url}\n\n{agent_result}"
+            # Use agent result directly as the raw text to send (URL removed)
+            text_to_send_raw = agent_result
 
             # Escape HTML characters for summary part to prevent parsing errors
-            text_to_send_escaped_summary = html.escape(agent_result)
-            # Keep URL unescaped unless it contains special chars (less likely)
-            text_to_send_formatted = (
-                f"{extracted_url}\n\n{text_to_send_escaped_summary}"
-            )
-            # Note: Consider escaping the URL too if it might contain HTML special characters
-            # text_to_send_formatted = f"{html.escape(extracted_url)}\n\n{text_to_send_escaped_summary}"
+            text_to_send_formatted = html.escape(agent_result)
 
             # Send text in chunks if too long
             for i in range(0, len(text_to_send_formatted), MAX_LEN):
                 chunk = text_to_send_formatted[i : i + MAX_LEN]
                 try:
                     # Use HTML parse mode as we escaped the summary
+                    # Reply to the original message instead of just sending
                     await message.reply_text(chunk, parse_mode=ParseMode.HTML)
                     logger.info(f"Sent chunk {i // MAX_LEN + 1} successfully.")
                 except Exception as send_err:
@@ -110,6 +105,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     # Fallback to sending raw chunk without formatting if HTML fails
                     raw_chunk = text_to_send_raw[i : i + MAX_LEN]
                     try:
+                        # Reply to the original message instead of just sending
                         await message.reply_text(raw_chunk)
                         logger.info(
                             f"Sent chunk {i // MAX_LEN + 1} successfully (plain text fallback)."
