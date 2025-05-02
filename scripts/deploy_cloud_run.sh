@@ -112,6 +112,13 @@ printf "  %s\n" "${SECRETS_TO_MAP[@]}"
 
 # Deploy to Cloud Run
 echo "Deploying service '$SERVICE_NAME' to Cloud Run in region '$REGION'..."
+
+# You can add additional flags here as needed. Example:
+# --memory=512Mi     # Specify memory
+# --cpu=1            # Specify CPU
+# --min-instances=0  # Allows scaling to zero (default, so not explicitly required)
+# --max-instances=10 # Maximum number of instances
+
 gcloud run deploy "$SERVICE_NAME" \
   --image="$IMAGE_NAME" \
   --platform=managed \
@@ -120,7 +127,6 @@ gcloud run deploy "$SERVICE_NAME" \
   --allow-unauthenticated \
   $SECRETS_ARG \
   --project="$PROJECT_ID"
-  # Add other flags as needed, e.g., --cpu=1, --memory=512Mi
 
 if [ $? -ne 0 ]; then echo "Error: Cloud Run deployment failed." >&2; exit 1; fi
 
@@ -141,14 +147,14 @@ for mapping in "${SECRETS_TO_MAP[@]}"; do
   secret_ref=$(echo "$mapping" | cut -d'=' -f2)
   secret_id=$(echo "$secret_ref" | cut -d':' -f1)
   
-  if [[ "${env_var_name,,}" == "telegram_bot_token" ]]; then
+  if [[ "$(echo "$env_var_name" | tr '[:upper:]' '[:lower:]')" == "telegram_bot_token" ]]; then
     TELEGRAM_BOT_TOKEN_SECRET_ID="$secret_id"
   fi
   # Use the env var name expected by bot.py (which matches the secret name here)
-  if [[ "${env_var_name,,}" == "webhook_secret_path" ]]; then
+  if [[ "$(echo "$env_var_name" | tr '[:upper:]' '[:lower:]')" == "webhook_secret_path" ]]; then
     WEBHOOK_SECRET_PATH_SECRET_ID="$secret_id"
   fi
-  if [[ "${env_var_name,,}" == "telegram_webhook_secret_token" ]]; then
+  if [[ "$(echo "$env_var_name" | tr '[:upper:]' '[:lower:]')" == "telegram_webhook_secret_token" ]]; then
     WEBHOOK_SECRET_TOKEN_SECRET_ID="$secret_id"
   fi
 done
@@ -190,28 +196,75 @@ echo "Setting webhook to: $FINAL_WEBHOOK_URL"
 # Use curl to set the webhook
 API_URL="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook"
 
-curl_command=("curl" "-s" "-X" "POST" "$API_URL" \
-  "-H" "Content-Type: application/json" \
-  "-d" "{\"url\": \"$FINAL_WEBHOOK_URL\""
-)
+echo "DEBUG: Preparing curl command..."
 
+# Construct the complete JSON payload in one string
 if [ -n "$WEBHOOK_SECRET_TOKEN" ]; then
   echo "Using webhook secret token."
-  curl_command+=(", \"secret_token\": \"$WEBHOOK_SECRET_TOKEN\"}")
+  JSON_PAYLOAD="{\"url\": \"$FINAL_WEBHOOK_URL\", \"secret_token\": \"$WEBHOOK_SECRET_TOKEN\"}"
 else
   echo "No webhook secret token found/used."
-  curl_command+=("}")
+  JSON_PAYLOAD="{\"url\": \"$FINAL_WEBHOOK_URL\"}"
 fi
 
-RESPONSE=$("${curl_command[@]}")
+echo "DEBUG: JSON Payload: $JSON_PAYLOAD"
+
+# Function to make the curl request with retries
+set_webhook_with_retry() {
+  local max_retries=3
+  local retry_count=0
+  local wait_time=2
+
+  while [ $retry_count -lt $max_retries ]; do
+    echo "DEBUG: Setting webhook (attempt $((retry_count + 1))/$max_retries)..."
+    
+    # Make the request
+    RESPONSE=$(curl -s -X POST "$API_URL" \
+      -H "Content-Type: application/json" \
+      -d "$JSON_PAYLOAD")
+    
+    CURL_EXIT_CODE=$?
+
+    # Check for rate limit error
+    if [ $CURL_EXIT_CODE -eq 0 ] && echo "$RESPONSE" | grep -q '"error_code":429'; then
+      retry_after=$(echo "$RESPONSE" | grep -o '"retry_after":[0-9]*' | grep -o '[0-9]*')
+      
+      # If retry_after is not found or not a number, use default wait time
+      if [ -z "$retry_after" ] || ! [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+        retry_after=$wait_time
+      fi
+      
+      echo "Rate limited by Telegram API. Waiting ${retry_after}s before retry..."
+      sleep $((retry_after + 1))  # Wait a bit longer than recommended
+      retry_count=$((retry_count + 1))
+      continue
+    fi
+    
+    # If we get here, either there was no rate limit error or another error occurred
+    break
+  done
+  
+  return $CURL_EXIT_CODE
+}
+
+# Call the function to make the request with retries
+set_webhook_with_retry
+CURL_EXIT_CODE=$?
+
+# For debugging, let's see the response
+echo "DEBUG: Webhook response: $RESPONSE"
 
 # Check response from Telegram API
-if echo "$RESPONSE" | grep -q '"ok":true'; then
+if [ $CURL_EXIT_CODE -ne 0 ]; then
+    echo "Error: curl command failed with exit code $CURL_EXIT_CODE" >&2
+    exit 1
+elif echo "$RESPONSE" | grep -q '"ok":true'; then
   echo "Telegram webhook set successfully!"
-echo "Result: $RESPONSE"
-elif echo "$RESPONSE" | grep -q 'Webhook is already set'; then
+  echo "Result: $RESPONSE"
+elif echo "$RESPONSE" | grep -q '"description":"Webhook is already set"'; then
+  # This is also a success case, webhook is properly set
   echo "Telegram webhook was already set to this URL."
-echo "Result: $RESPONSE"
+  echo "Result: $RESPONSE"
 else
   echo "Error setting Telegram webhook." >&2
   echo "URL used: $FINAL_WEBHOOK_URL" >&2

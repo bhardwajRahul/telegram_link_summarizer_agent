@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import asyncio
 import re
 import html  # <-- Add this import
+import json
 
 from fastapi import FastAPI, Request, Response, HTTPException, Header, APIRouter
 import uvicorn
@@ -32,12 +33,29 @@ URL_REGEX = r"(https?:\/\/[^\s]+)"
 
 # --- Environment Variables & Constants ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# For Cloud Run, we should use the service URL as the webhook URL
+# if not explicitly set through WEBHOOK_URL
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 WEBHOOK_SECRET_PATH = os.getenv("WEBHOOK_SECRET_PATH", "webhook")
+
+# If we're in Cloud Run, we'll see these environment variables
+CLOUD_RUN_SERVICE_URL = os.getenv("K_SERVICE")  # Will be set in Cloud Run
 
 if not BOT_TOKEN:
     logger.critical("TELEGRAM_BOT_TOKEN missing. Bot cannot start.")
     exit()
+
+# If we're in Cloud Run but no WEBHOOK_URL is set, use inference
+if CLOUD_RUN_SERVICE_URL and not WEBHOOK_URL:
+    # Get the Cloud Run URL from environment variables
+    service = os.getenv("K_SERVICE", "unknown-service")
+    region = os.getenv("CLOUD_RUN_REGION", os.getenv("K_REGION", "unknown-region"))
+
+    # Construct the service URL
+    WEBHOOK_URL = (
+        f"https://{service}-{os.getenv('K_REVISION', 'latest')}.{region}.run.app"
+    )
+    logger.info(f"Running in Cloud Run, inferred WEBHOOK_URL: {WEBHOOK_URL}")
 
 if not WEBHOOK_URL:
     logger.warning(
@@ -47,6 +65,9 @@ if not WEBHOOK_URL:
 
 # --- Global Application Object ---
 ptb_app = Application.builder().token(BOT_TOKEN).build()
+
+# Create a flag to track PTB initialization
+_PTB_INITIALIZED = False
 
 
 # --- Message Handler ---
@@ -145,9 +166,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"Unhandled exception processing message for URL {extracted_url}: {e}",
             exc_info=True,
         )
-        # Removed user-facing error reporting
-
-    # Removed the finally block as the thinking_message is gone
 
 
 # --- FastAPI Lifespan Management (Setup/Teardown) ---
@@ -155,18 +173,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def lifespan(app: FastAPI):
     # --- Startup ---
     logger.info("Application startup...")
+    global ptb_app, _PTB_INITIALIZED  # Make sure we're modifying the global instance
+
+    # Initialize the application first
+    logger.info("Initializing PTB application...")
+    await ptb_app.initialize()
+
+    # Add handlers
     url_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message)
     ptb_app.add_handler(url_handler)
 
     if WEBHOOK_URL:
-        full_webhook_url = f"{WEBHOOK_URL.rstrip('/')}/{WEBHOOK_SECRET_PATH}"
+        full_webhook_url = (
+            f"{WEBHOOK_URL.rstrip('/')}/{WEBHOOK_SECRET_PATH.lstrip('/')}"
+        )
         logger.info(f"Setting webhook to: {full_webhook_url}")
         try:
-            await ptb_app.initialize()
-            full_webhook_url = (
-                f"{WEBHOOK_URL.rstrip('/')}/{WEBHOOK_SECRET_PATH.lstrip('/')}"
-            )
-            logger.info(f"Setting webhook for URL: {full_webhook_url}")
             await ptb_app.bot.set_webhook(
                 url=full_webhook_url,
                 secret_token=os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN"),
@@ -176,12 +198,15 @@ async def lifespan(app: FastAPI):
             logger.info("Webhook set successfully.")
         except Exception as e:
             logger.error(f"Failed to set webhook: {e}", exc_info=True)
-            # Decide if you want to exit or continue without webhook
-            # exit()
+            # Don't exit - let the application continue even if webhook setup fails
     else:
         logger.warning(
             "WEBHOOK_URL not set, skipping webhook setup. Bot will not receive updates via webhook."
         )
+
+    # Mark the PTB app as initialized
+    _PTB_INITIALIZED = True
+    logger.info("Bot initialization complete.")
 
     yield
 
@@ -212,26 +237,56 @@ app = FastAPI(lifespan=lifespan)
 @app.post(f"/{WEBHOOK_SECRET_PATH}")
 async def webhook(
     request: Request,
-    secret_token: str | None = Header(
-        None, alias="X-Telegram-Bot-Api-Secret-Token"
-    ),  # Add this parameter
+    secret_token: str | None = Header(None, alias="X-Telegram-Bot-Api-Secret-Token"),
 ) -> Response:
     """Handles incoming Telegram updates via webhook."""
+    logger.info("Webhook endpoint called")
+
     # --- Webhook Secret Token Verification ---
     TELEGRAM_WEBHOOK_SECRET_TOKEN = os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN")
     if TELEGRAM_WEBHOOK_SECRET_TOKEN and secret_token != TELEGRAM_WEBHOOK_SECRET_TOKEN:
-        logger.warning("Invalid secret token received.")
+        logger.warning(f"Invalid secret token received: '{secret_token}'")
         raise HTTPException(status_code=403, detail="Invalid secret token")
-    # --- End Verification ---
+
+    # Ensure the bot is initialized before processing updates
+    if not _PTB_INITIALIZED:
+        logger.error("Bot not yet initialized. Request rejected.")
+        raise HTTPException(status_code=503, detail="Bot initialization in progress")
 
     try:
+        # Get the raw request body for logging if needed
+        body = await request.body()
+        logger.info(f"Received webhook request body length: {len(body)} bytes")
+
+        # Parse the request JSON
         update_data = await request.json()
+        logger.info(f"Successfully parsed update JSON")
+
+        # Convert to Telegram Update object
         update = Update.de_json(update_data, ptb_app.bot)
-        logger.debug(f"Received update: {update.update_id}")
+        logger.info(
+            f"Received update: {update.update_id}, type: {type(update).__name__}"
+        )
+
+        # Extract some basic info for logging
+        message = update.message or update.edited_message
+        if message:
+            logger.info(
+                f"Message content: '{message.text if message.text else '[no text]'}'"
+            )
+
+        # Process the update
+        logger.info("Processing update with PTB application...")
         await ptb_app.process_update(update)
+        logger.info(f"Successfully processed update {update.update_id}")
+
         return {"ok": True}
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse webhook request JSON: {e}", exc_info=True)
+        return {"ok": False, "error": "Invalid JSON"}
     except Exception as e:
         logger.error(f"Error processing update: {e}", exc_info=True)
+        # Return 200 even on error to prevent Telegram from retrying too aggressively
         return {"ok": False, "error": str(e)}
 
 

@@ -5,10 +5,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install essential system packages (if any are still needed beyond Python)
-# We remove Chrome/Chromedriver related dependencies as Selenium runs separately
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Minimal set, add others if needed by your app (e.g., for image processing)
-    && rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 RUN pip install --no-cache-dir uv

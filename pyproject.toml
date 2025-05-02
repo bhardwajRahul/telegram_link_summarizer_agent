@@ -5,7 +5,7 @@ description = "An agentic Telegram bot to summarize links and papers."
 readme = "README.md"
 requires-python = ">=3.11" # Adjusted to match Docker image
 dependencies = [
-    "baml-py>=0.85.0",
+    "baml-py>=0.86.1",
     "langgraph>=0.0.57",
     "langchain>=0.2.0",
     "langchain-openai>=0.1.7", # Assuming OpenAI, change if needed
