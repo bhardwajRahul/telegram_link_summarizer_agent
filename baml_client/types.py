@@ -51,6 +51,7 @@ class ExtractorTool(str, Enum):
     WebpageExtractor = "WebpageExtractor"
     PDFExtractor = "PDFExtractor"
     TwitterExtractor = "TwitterExtractor"
+    LinkedInExtractor = "LinkedInExtractor"
     Unsupported = "Unsupported"
 
 class Summary(BaseModel):

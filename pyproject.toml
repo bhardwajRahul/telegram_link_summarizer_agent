@@ -39,6 +39,7 @@ dependencies = [
     "nest-asyncio>=1.6.0",
     "webdriver-manager>=4.0.2",
     "crawl4ai>=0.6.2",
+    "playwright>=1.52.0",
 ]
 
 [tool.setuptools]

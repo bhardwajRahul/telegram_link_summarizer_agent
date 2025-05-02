@@ -3,6 +3,7 @@ enum ExtractorTool {
   WebpageExtractor // For general webpages
   PDFExtractor     // For PDF documents
   TwitterExtractor // For Twitter/X URLs
+  LinkedInExtractor // For LinkedIn post URLs
   Unsupported      // For URLs or content types we cannot handle
 }
 
@@ -25,6 +26,7 @@ function RouteRequest(original_message: string) -> ExtractorTool {
 
     - If the URL points to a PDF file (ends with .pdf), choose PDFExtractor.
     - If the URL is from Twitter or X (contains twitter.com or x.com), choose TwitterExtractor.
+    - If the URL is a LinkedIn post (contains linkedin.com/posts/), choose LinkedInExtractor.
     - For all other standard web URLs (http or https), choose WebpageExtractor.
     - If no URL is found, or the URL type is clearly unsupported (e.g., ftp://, mailto:), choose Unsupported.
 
@@ -53,6 +55,13 @@ test RouteTwitter {
   functions [RouteRequest]
   args {
     original_message #"Look at this thread: https://x.com/user/status/12345"#
+  }
+}
+
+test RouteLinkedIn {
+  functions [RouteRequest]
+  args {
+    original_message #"Interesting thoughts here: https://www.linkedin.com/posts/someuser_activity-1234567890-abcd?utm_source=share"#
   }
 }
 
