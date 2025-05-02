@@ -2,27 +2,28 @@
 
 ![Agent Visualization](./images/image.png)
 
-An agentic Telegram bot designed to summarize web links (articles, papers, etc.) sent in a chat. It uses LangGraph to orchestrate multiple tools and language models to extract content, search for relevant information, and generate concise summaries.
+An agentic Telegram bot designed to summarize web links (articles, papers, tweets etc.) sent in a chat. It uses LangGraph to orchestrate multiple tools and language models to determine the link type, extract content, and generate concise summaries.
 
 ## ✨ Features
 
-*   **Link Summarization:** Extracts content from URLs and provides summaries.
-*   **Web Search Integration:** Uses Tavily Search to gather context if needed.
+*   **Link Summarization:** Extracts content from URLs (webpages, PDFs, Twitter/X) and provides summaries.
+*   **LLM Routing:** Uses a BAML LLM function (`RouteRequest`) to determine the type of link (Webpage, PDF, Twitter, Unsupported).
+*   **Web Search/Extraction:** Uses Tavily for standard webpage content extraction.
 *   **PDF Support:** Can process and summarize PDF documents found at URLs.
-*   **Twitter/X Support:** Fetches tweet content using Tweepy.
+*   **Twitter/X Support:** Fetches tweet content (including threads) using the `twitterapi.io` service.
 *   **Agentic Workflow:** Leverages LangGraph for a multi-step reasoning process.
-*   **BAML Integration:** Uses BAML for structured output generation.
-*   **Telegram Bot Interface:** Interacts via a simple Telegram bot.
+*   **BAML Integration:** Uses BAML for structured output generation (summaries and routing).
+*   **Telegram Bot Interface:** Interacts via a simple Telegram bot, replying silently on failure.
 
 ## 🛠️ Tech Stack
 
-*   **Twitter/X API:** Tweepy
+*   **Routing/Summarization:** BAML (Boundary) + LLM (e.g., Gemini, Deepseek)
 *   **Orchestration:** LangGraph
-*   **LLM Interaction/Structured Output:** BAML (Boundary)
+*   **Twitter/X API:** `twitterapi.io` via `requests`
+*   **Web Extraction:** Tavily Search SDK
+*   **PDF Extraction:** PyMuPDF (`fitz`)
 *   **Telegram Bot:** `python-telegram-bot`
-*   **Web Scraping:** Firecrawl, Beautiful Soup, Pyppeteer
-*   **Search:** Tavily Search
-*   **Language Models:** Configurable (defaults likely via LangChain/OpenAI)
+*   **Web Framework:** FastAPI + Uvicorn
 *   **Dependencies:** Managed via `pyproject.toml` (using `uv` or `pip`)
 
 ## 🚀 Setup
@@ -36,26 +37,29 @@ An agentic Telegram bot designed to summarize web links (articles, papers, etc.)
 2.  **Install Dependencies (using [`uv`](https://github.com/astral-sh/uv) or `pip`))**
     *   You can use [`uv`](https://github.com/astral-sh/uv) or standard `pip`:
         ```bash
-        # Using uv
-        uv pip install .
+        # Using uv (recommended)
+        uv pip install -e . # Install in editable mode
 
         # Or using pip
-        pip install .
+        pip install -e . # Install in editable mode
         ```
 
 3.  **Set up Environment Variables:**
     Create a file named `.env` in the project root directory. Add the following environment variables with your actual values:
     ```env
-    # API Keys for Language Models and Tools
-    GEMINI_API_KEY="your_gemini_api_key"
-    DEEPSEEK_API_KEY="your_deepseek_api_key"
-    TAVILY_API_KEY="your_tavily_api_key"
-    X_BEARER_TOKEN="your_twitter_v2_bearer_token" # Needed for fetching tweets
+    # --- Core API Keys ---
+    # Select *one* LLM provider for BAML functions (or configure multi-provider
+    # GEMINI_API_KEY="your_google_gemini_api_key" # For Google LLMs
+    DEEPSEEK_API_KEY="your_deepseek_api_key" # For Deepseek LLMs
 
-    # Telegram Bot Configuration
+    # Tools
+    TAVILY_API_KEY="your_tavily_api_key"
+    X-API-KEY="your_twitterapi.io_api_key" # API Key for twitterapi.io service
+
+    # --- Telegram Bot Configuration ---
     TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
 
-    # Webhook Configuration (Needed for local testing with ngrok or deployment)
+    # --- Webhook Configuration (Needed for deployment or local testing with ngrok) ---
     # For ngrok, use the https://<your-ngrok-subdomain>.ngrok-free.app URL
     # For deployment, this isn't strictly needed in the .env for the *deployed* app,
     # but the deployment script will set the webhook based on the Cloud Run URL.
@@ -66,49 +70,33 @@ An agentic Telegram bot designed to summarize web links (articles, papers, etc.)
     # Example: /webhook/aBcDeF12345 - must start with a slash!
     WEBHOOK_SECRET_PATH="/your_unique_and_random_webhook_path"
     ```
-    **Important:** Keep your `.env` file secure and do not commit it to version control. The `.gitignore` file should already include `.env`.
+    **Important:** 
+    *   Get your `X-API-KEY` from [twitterapi.io](https://twitterapi.io/).
+    *   Ensure your chosen LLM API Key (`GEMINI_API_KEY` or `DEEPSEEK_API_KEY`) is uncommented and valid.
+    *   Keep your `.env` file secure and do not commit it. The `.gitignore` should exclude `.env`.
 
 ## ▶️ Usage
 
-1.  **(Optional) Run the Agent Script Directly (for testing):**
-    *   You can test the core agent logic by running `agent.py`. Modify the example URL within the script if needed.
+1.  **(Optional) Run the Agent Script Directly (for testing specific URLs):**
+    *   You can test the core agent logic by running `agent.py`. Modify the test cases at the bottom of the script.
     ```bash
     python agent.py
     ```
 
-2.  **(Optional) Deploy to LangGraph Studio:**
-    *   If you have the LangGraph CLI installed (`pip install langgraph-cli`), you can deploy your agent graph for monitoring and debugging:
-    ```bash
-    langgraph deploy
-    ```
-    *   Follow the CLI prompts to name your deployment.
-
-3.  **Start the Telegram Bot (Primary Usage):**
-    *   **Note:** This interface is currently untested.
-    ```bash
-    python bot.py
-    ```
-
-4.  **Interact with the Bot:**
-    *   Open Telegram and find the bot you created.
-    *   Send a message containing a URL (e.g., `https://example.com/article`).
-    *   The bot will process the link and reply with a summary.
-
 ## 📊 Agent Visualization
 
-The `agent_viz.py` script can be used to generate a visualization of the LangGraph agent (like the image at the top). Run it if needed:
+The `agent_viz.py` script can be used to generate a visualization of the LangGraph agent (like the image at the top). Ensure `graphviz` is installed (`brew install graphviz` or `sudo apt-get install graphviz`).
 
 ```bash
-marimo edit agent_viz.py
+python agent_viz.py
 ```
+This will generate an `agent_graph.png` file.
 
-This will open marimo and you can run and visualize the agent graph flow.
+## Local Running (Webhook Mode)
 
-## Local Running
+This runs the FastAPI server using `uvicorn`. This requires `USE_POLLING="false"` and a publicly accessible `WEBHOOK_URL` set in your `.env` file (e.g., using ngrok) for the bot to receive messages from Telegram.
 
-This runs the FastAPI server directly using `uvicorn`. Note that without a publicly accessible `WEBHOOK_URL` set in your `.env` file (e.g., using ngrok), the bot will not receive messages from Telegram when run locally this way.
-
-Make sure you have installed dependencies (`uv sync`) and configured your `.env` file.
+Make sure you have installed dependencies (`uv pip install -e .`) and configured your `.env` file.
 
 ```bash
 # Make the script executable (only needed once)
@@ -238,7 +226,7 @@ We have provided scripts to streamline this process.
 
 This script helps you create secrets in Google Cloud Secret Manager and add your sensitive values (API keys, tokens).
 
-**IMPORTANT:** Before running, you **must** edit the `SECRETS` array inside `scripts/setup_secrets.sh` to include the *exact names* of the environment variables defined in your `.env` file (e.g., `TELEGRAM_BOT_TOKEN`, `TAVILY_API_KEY`, etc.).
+**IMPORTANT:** Before running, you **must** edit the `SECRETS` array inside `scripts/setup_secrets.sh` to include the *exact names* of the environment variables defined in your `.env` file (e.g., `TELEGRAM_BOT_TOKEN`, `TAVILY_API_KEY`, `X-API-KEY`, `GEMINI_API_KEY` etc.).
 
 ```bash
 # Make the script executable (only needed once)
@@ -254,7 +242,7 @@ Follow the prompts to enter your GCP Project ID (if not already configured) and 
 
 This script automates building the image, pushing it to Artifact Registry, deploying to Cloud Run, and setting the Telegram webhook.
 
-**IMPORTANT:** Before running, you **must** edit the `SECRETS_TO_MAP` array inside `scripts/deploy_cloud_run.sh`. This array defines how the secrets you created in Secret Manager map to environment variables in your Cloud Run service. Ensure the secret names match those used in `setup_secrets.sh`.
+**IMPORTANT:** Before running, you **must** edit the `SECRETS_TO_MAP` array inside `scripts/deploy_cloud_run.sh`. This array defines how the secrets you created map to environment variables in your Cloud Run service. Ensure the secret names match those used in `setup_secrets.sh` (e.g., `X-API-KEY=x-api-key-secret-name:latest`).
 
 ```bash
 # Make the script executable (only needed once)
@@ -267,8 +255,6 @@ chmod +x ./scripts/deploy_cloud_run.sh
 The script will prompt you for your GCP Project ID, Region, Service Name, and Artifact Registry Repository Name if they are not set as environment variables. It will then guide you through the build, push, and deployment process, including setting the Telegram webhook automatically if it can find your `TELEGRAM_BOT_TOKEN` secret mapping.
 
 ### Manual Steps (If needed)
-
-If you prefer to run the steps manually or need to troubleshoot, the original commands are detailed below. The deployment script automates these.
 
 <details>
 <summary>Click to view manual gcloud commands</summary>
@@ -302,23 +288,16 @@ If you prefer to run the steps manually or need to troubleshoot, the original co
 5.  **Manage Secrets with Secret Manager (Recommended):**
     Store API keys and tokens securely using Google Cloud Secret Manager. Use the `gcloud` CLI (as done by `setup_secrets.sh`):
 
-    *   **Create Secret:** (Do this once per secret, e.g., `telegram-bot-token`, `tavily-api-key`)
+    *   **Create Secret:** (Example: `x-api-key` for the twitterapi.io key)
         ```bash
-        # Example for bot token
-        gcloud secrets create telegram-bot-token --replication-policy="automatic"
-        # Example for Tavily key
-        gcloud secrets create tavily-api-key --replication-policy="automatic"
-        # Add others as needed...
+        gcloud secrets create x-api-key --replication-policy="automatic"
+        # Add others like tavily-api-key, telegram-bot-token, gemini-api-key, etc.
         ```
 
-    *   **Add Secret Version (Add the actual value):**
+    *   **Add Secret Version:**
         ```bash
-        # Example for bot token - you will be prompted for the value
-        printf "YOUR_ACTUAL_TELEGRAM_BOT_TOKEN" | gcloud secrets versions add telegram-bot-token --data-file=-
-
-        # Example for Tavily key - you will be prompted for the value
-        printf "YOUR_ACTUAL_TAVILY_API_KEY" | gcloud secrets versions add tavily-api-key --data-file=-
-        # Add others as needed...
+        printf "YOUR_ACTUAL_TWITTERAPI_IO_KEY" | gcloud secrets versions add x-api-key --data-file=-
+        # Add versions for other secrets...
         ```
 
 6.  **Build and Push Docker Image:**
@@ -330,7 +309,7 @@ If you prefer to run the steps manually or need to troubleshoot, the original co
     ```
 
 7.  **Deploy to Cloud Run:**
-    Replace `SECRET_NAME=SECRET_ID:latest,...` with your actual secret mappings.
+    Replace `SECRET_NAME=SECRET_ID:latest,...` with your actual secret mappings, including `X-API-KEY`.
     ```bash
     gcloud run deploy $SERVICE_NAME \
       --image $IMAGE_NAME \
@@ -338,10 +317,9 @@ If you prefer to run the steps manually or need to troubleshoot, the original co
       --region $REGION \
       --port 8080 \
       --allow-unauthenticated \
-      --set-secrets=TELEGRAM_BOT_TOKEN=telegram-bot-token:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest,WEBHOOK_SECRET_TOKEN=webhook-secret-token:latest
-      # Add other flags like --cpu, --memory if needed
+      --set-secrets=TELEGRAM_BOT_TOKEN=telegram-bot-token:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest,X-API-KEY=x-api-key:latest,TELEGRAM_WEBHOOK_SECRET_TOKEN=webhook-secret-token:latest
+      # Adjust secret names (e.g., x-api-key, webhook-secret-token) and versions as needed
     ```
-    **Important:** The service account used by Cloud Run (usually `PROJECT_NUMBER-compute@developer.gserviceaccount.com`) needs the "Secret Manager Secret Accessor" IAM role for the secrets you are mapping.
 
 8.  **Get Service URL & Set Telegram Webhook:**
     ```bash
@@ -354,9 +332,13 @@ If you prefer to run the steps manually or need to troubleshoot, the original co
     # Get your webhook secret (optional, replace secret-id if different)
     WEBHOOK_SECRET=$(gcloud secrets versions access latest --secret=telegram-webhook-secret-token)
 
-    # Set the webhook (adjust path /webhook if needed)
-    curl -F "url=${SERVICE_URL}/webhook" \
-         -F "secret_token=${WEBHOOK_SECRET}" \
+    # Get your webhook path (replace secret-id if different)
+    WEBHOOK_SECRET_PATH_VAL=$(gcloud secrets versions access latest --secret=webhook-secret-path) # Assuming you stored it
+    # Get your webhook secret token (replace secret-id if different)
+    WEBHOOK_SECRET_TOKEN_VAL=$(gcloud secrets versions access latest --secret=webhook-secret-token) 
+
+    curl -F "url=${SERVICE_URL}${WEBHOOK_SECRET_PATH_VAL}" \
+         -F "secret_token=${WEBHOOK_SECRET_TOKEN_VAL}" \
          https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook
     ```
 
