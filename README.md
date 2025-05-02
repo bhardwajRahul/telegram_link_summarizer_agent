@@ -6,11 +6,12 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 
 ## ✨ Features
 
-*   **Link Summarization:** Extracts content from URLs (webpages, PDFs, Twitter/X) and provides summaries.
-*   **LLM Routing:** Uses a BAML LLM function (`RouteRequest`) to determine the type of link (Webpage, PDF, Twitter, Unsupported).
+*   **Link Summarization:** Extracts content from URLs (webpages, PDFs, Twitter/X, LinkedIn posts) and provides summaries.
+*   **LLM Routing:** Uses a BAML LLM function (`RouteRequest`) to determine the type of link (Webpage, PDF, Twitter, LinkedIn, Unsupported).
 *   **Web Search/Extraction:** Uses Tavily for standard webpage content extraction.
 *   **PDF Support:** Can process and summarize PDF documents found at URLs.
 *   **Twitter/X Support:** Fetches tweet content (including threads) using the `twitterapi.io` service.
+*   **LinkedIn Support:** Extracts content from LinkedIn post URLs using the `linkedin_scraper_tool` (which leverages Tavily search).
 *   **Agentic Workflow:** Leverages LangGraph for a multi-step reasoning process.
 *   **BAML Integration:** Uses BAML for structured output generation (summaries and routing).
 *   **Telegram Bot Interface:** Interacts via a simple Telegram bot, replying silently on failure.
@@ -21,6 +22,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 *   **Orchestration:** LangGraph
 *   **Twitter/X API:** `twitterapi.io` via `requests`
 *   **Web Extraction:** Tavily Search SDK
+*   **LinkedIn Extraction:** Tavily Search SDK (via `linkedin_scraper_tool.py`)
 *   **PDF Extraction:** PyMuPDF (`fitz`)
 *   **Telegram Bot:** `python-telegram-bot`
 *   **Web Framework:** FastAPI + Uvicorn
