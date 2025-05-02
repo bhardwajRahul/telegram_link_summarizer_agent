@@ -11,7 +11,6 @@ dependencies = [
     "langchain-openai>=0.1.7", # Assuming OpenAI, change if needed
     "python-telegram-bot[ext]>=21.0",
     "requests>=2.31.0",
-    "beautifulsoup4>=4.12.3",
     "pypdf>=4.2.0",
     "python-dotenv>=1.0.1",
     "tavily-python>=0.3.3", # Adding Tavily as it's in config
@@ -34,12 +33,7 @@ dependencies = [
     "typing-inspection>=0.4.0",
     "annotated-types>=0.7.0",
     "anyio>=4.9.0",
-    "tweepy>=4.15.0",
-    "selenium>=4.31.0",
     "nest-asyncio>=1.6.0",
-    "webdriver-manager>=4.0.2",
-    "crawl4ai>=0.6.2",
-    "playwright>=1.52.0",
 ]
 
 [tool.setuptools]

@@ -1,5 +1,9 @@
 # Telegram Link Summarizer Agent
 
+[Join the Telegram Channel @tech_links for curated tech news and interesting links](https://t.me/tech_links)
+
+If you want to get the latest news and interesting links for free, feel free to join the channel. If you find this project useful, giving the repository a star would be appreciated.
+
 ![Agent Visualization](./images/image.png)
 
 An agentic Telegram bot designed to summarize web links (articles, papers, tweets etc.) sent in a chat. It uses LangGraph to orchestrate multiple tools and language models to determine the link type, extract content, and generate concise summaries.
@@ -349,3 +353,7 @@ The script will prompt you for your GCP Project ID, Region, Service Name, and Ar
 ## License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+
+---
+
+**Stay updated:** [Join the Telegram Channel @tech_links](https://t.me/tech_links) for the latest news and interesting links. If you find this project useful, please consider starring the repository.
