@@ -47,14 +47,7 @@ if not BOT_TOKEN:
 
 # If we're in Cloud Run but no WEBHOOK_URL is set, use inference
 if CLOUD_RUN_SERVICE_URL and not WEBHOOK_URL:
-    # Get the Cloud Run URL from environment variables
-    service = os.getenv("K_SERVICE", "unknown-service")
-    region = os.getenv("CLOUD_RUN_REGION", os.getenv("K_REGION", "unknown-region"))
-
-    # Construct the service URL
-    WEBHOOK_URL = (
-        f"https://{service}-{os.getenv('K_REVISION', 'latest')}.{region}.run.app"
-    )
+    WEBHOOK_URL = f"https://{os.getenv('K_SERVICE')}-{os.getenv('K_REVISION', 'latest')}.{os.getenv('K_REGION', 'unknown')}.run.app"
     logger.info(f"Running in Cloud Run, inferred WEBHOOK_URL: {WEBHOOK_URL}")
 
 if not WEBHOOK_URL:
@@ -65,9 +58,6 @@ if not WEBHOOK_URL:
 
 # --- Global Application Object ---
 ptb_app = Application.builder().token(BOT_TOKEN).build()
-
-# Create a flag to track PTB initialization
-_PTB_INITIALIZED = False
 
 
 # --- Message Handler ---
@@ -166,6 +156,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"Unhandled exception processing message for URL {extracted_url}: {e}",
             exc_info=True,
         )
+        # Removed user-facing error reporting
+
+    # Removed the finally block as the thinking_message is gone
 
 
 # --- FastAPI Lifespan Management (Setup/Teardown) ---
@@ -173,7 +166,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def lifespan(app: FastAPI):
     # --- Startup ---
     logger.info("Application startup...")
-    global ptb_app, _PTB_INITIALIZED  # Make sure we're modifying the global instance
+    global ptb_app  # Make sure we're modifying the global instance
 
     # Initialize the application first
     logger.info("Initializing PTB application...")
@@ -198,14 +191,15 @@ async def lifespan(app: FastAPI):
             logger.info("Webhook set successfully.")
         except Exception as e:
             logger.error(f"Failed to set webhook: {e}", exc_info=True)
-            # Don't exit - let the application continue even if webhook setup fails
+            # Decide if you want to exit or continue without webhook
+            # exit()
     else:
         logger.warning(
             "WEBHOOK_URL not set, skipping webhook setup. Bot will not receive updates via webhook."
         )
 
-    # Mark the PTB app as initialized
-    _PTB_INITIALIZED = True
+    # Create a flag to indicate the bot is ready
+    app.state.bot_initialized = True
     logger.info("Bot initialization complete.")
 
     yield
@@ -245,11 +239,13 @@ async def webhook(
     # --- Webhook Secret Token Verification ---
     TELEGRAM_WEBHOOK_SECRET_TOKEN = os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN")
     if TELEGRAM_WEBHOOK_SECRET_TOKEN and secret_token != TELEGRAM_WEBHOOK_SECRET_TOKEN:
-        logger.warning(f"Invalid secret token received: '{secret_token}'")
+        logger.warning(
+            f"Invalid secret token received: '{secret_token}' vs expected token"
+        )
         raise HTTPException(status_code=403, detail="Invalid secret token")
 
     # Ensure the bot is initialized before processing updates
-    if not _PTB_INITIALIZED:
+    if not hasattr(app.state, "bot_initialized") or not app.state.bot_initialized:
         logger.error("Bot not yet initialized. Request rejected.")
         raise HTTPException(status_code=503, detail="Bot initialization in progress")
 
