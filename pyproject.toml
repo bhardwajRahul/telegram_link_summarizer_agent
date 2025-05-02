@@ -22,7 +22,6 @@ dependencies = [
     "langchain-community>=0.3.22",
     "rich>=14.0.0",
     "loguru>=0.7.3",
-    "pyppeteer>=2.0.0",
     "fastapi>=0.115.12",
     "uvicorn>=0.34.2",
     "pymupdf>=1.25.5",
@@ -39,6 +38,7 @@ dependencies = [
     "selenium>=4.31.0",
     "nest-asyncio>=1.6.0",
     "webdriver-manager>=4.0.2",
+    "crawl4ai>=0.6.2",
 ]
 
 [tool.setuptools]
