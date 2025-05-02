@@ -98,6 +98,33 @@ class BamlSyncClient:
       return BamlSyncClient(self.__runtime, self.__ctx_manager, new_options)
 
     
+    def RouteRequest(
+        self,
+        original_message: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ExtractorTool:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.call_function_sync(
+        "RouteRequest",
+        {
+          "original_message": original_message,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(types.ExtractorTool, raw.cast_to(types, types, partial_types, False))
+    
     def SummarizeContent(
         self,
         content: str,content_type: types.ContentType,context: Optional[str],
@@ -137,6 +164,40 @@ class BamlStreamClient:
       self.__ctx_manager = ctx_manager
       self.__baml_options = baml_options or {}
 
+    
+    def RouteRequest(
+        self,
+        original_message: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[Optional[types.ExtractorTool], types.ExtractorTool]:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.stream_function_sync(
+        "RouteRequest",
+        {
+          "original_message": original_message,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlSyncStream[Optional[types.ExtractorTool], types.ExtractorTool](
+        raw,
+        lambda x: cast(Optional[types.ExtractorTool], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.ExtractorTool, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
     
     def SummarizeContent(
         self,

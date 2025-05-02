@@ -46,6 +46,13 @@ class ContentType(str, Enum):
     PDF = "PDF"
     GenericText = "GenericText"
 
+class ExtractorTool(str, Enum):
+    
+    WebpageExtractor = "WebpageExtractor"
+    PDFExtractor = "PDFExtractor"
+    TwitterExtractor = "TwitterExtractor"
+    Unsupported = "Unsupported"
+
 class Summary(BaseModel):
     title: str
     key_points: List[str]
