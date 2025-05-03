@@ -16,7 +16,7 @@ COPY . .
 
 # Install dependencies using uv from pyproject.toml
 # This avoids using the lock file directly which was causing issues
-RUN uv pip install --system .
+RUN uv pip install --system . --no-cache-dir
 
 # Expose the port the app runs on (adjust if your app uses a different port)
 # Cloud Run automatically uses the port defined by the PORT env var (default 8080)

@@ -2,6 +2,8 @@
 
 [Join the Telegram Channel @tech_links for curated tech news and interesting links](https://t.me/tech_links)
 
+[![GitHub stars](https://img.shields.io/github/stars/kargarisaac/telegram-link-summarizer-agent?style=social)](https://github.com/kargarisaac/telegram-link-summarizer-agent/stargazers) [![GitHub forks](https://img.shields.io/github/forks/kargarisaac/telegram-link-summarizer-agent?style=social)](https://github.com/kargarisaac/telegram-link-summarizer-agent/network/members) [![License](https://img.shields.io/github/license/kargarisaac/telegram-link-summarizer-agent)](https://github.com/kargarisaac/telegram-link-summarizer-agent/blob/main/LICENSE) [![Telegram Channel](https://img.shields.io/badge/Telegram-Join%20Channel-blue?logo=telegram)](https://t.me/tech_links)
+
 If you want to get the latest news and interesting links for free, feel free to join the channel. If you find this project useful, giving the repository a star would be appreciated.
 
 ![Agent Visualization](./images/image.png)
@@ -275,8 +277,7 @@ The script will prompt you for your GCP Project ID, Region, Service Name, and Ar
 
     gcloud config set project $PROJECT_ID
     gcloud config set run/region $REGION
-    ```
-2.  **Enable Required APIs:**
+    ```2.  **Enable Required APIs:**
     ```bash
     gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
     ```
@@ -290,8 +291,7 @@ The script will prompt you for your GCP Project ID, Region, Service Name, and Ar
 4.  **Configure Docker Authentication:**
     ```bash
     gcloud auth configure-docker ${REGION}-docker.pkg.dev
-    ```
-5.  **Manage Secrets with Secret Manager (Recommended):**
+    ```5.  **Manage Secrets with Secret Manager (Recommended):**
     Store API keys and tokens securely using Google Cloud Secret Manager. Use the `gcloud` CLI (as done by `setup_secrets.sh`):
 
     *   **Create Secret:** (Example: `x-api-key` for the twitterapi.io key)

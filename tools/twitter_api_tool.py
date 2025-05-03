@@ -9,9 +9,8 @@ load_dotenv()
 console = Console()
 
 API_BASE_URL = "https://api.twitterapi.io"
-API_KEY = os.getenv(
-    "X-API-KEY"
-)  # Changed from X-API-Key to match example .env convention if needed
+# Try reading with underscore first (common in container envs), fallback to hyphen
+API_KEY = os.getenv("X_API_KEY") or os.getenv("X-API-KEY")
 
 
 def _parse_twitter_datetime(datetime_str: str) -> datetime:
@@ -41,7 +40,8 @@ def fetch_tweet_thread(url: str) -> str:
         A string containing the formatted tweet thread, or an error message starting with "Error:".
     """
     if not API_KEY:
-        return "Error: X-API-KEY not found in environment variables."
+        # Update error message to reflect both attempts
+        return "Error: X_API_KEY or X-API-KEY not found in environment variables."
 
     # 1. Extract Tweet ID
     match = re.search(r"/status(?:es)?/(\d+)", url)
