@@ -65,7 +65,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 
     # Tools
     TAVILY_API_KEY="your_tavily_api_key"
-    X-API-KEY="your_twitterapi.io_api_key" # API Key for twitterapi.io service
+    TWITTER_API_IO_KEY="your_twitterapi.io_api_key" # API Key for twitterapi.io service
 
     # --- Telegram Bot Configuration ---
     TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
@@ -82,7 +82,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
     WEBHOOK_SECRET_PATH="/your_unique_and_random_webhook_path"
     ```
     **Important:** 
-    *   Get your `X-API-KEY` from [twitterapi.io](https://twitterapi.io/).
+    *   Get your `TWITTER_API_IO_KEY` from [twitterapi.io](https://twitterapi.io/).
     *   Ensure your chosen LLM API Key (`GEMINI_API_KEY` or `DEEPSEEK_API_KEY`) is uncommented and valid.
     *   Keep your `.env` file secure and do not commit it. The `.gitignore` should exclude `.env`.
 
@@ -237,7 +237,7 @@ We have provided scripts to streamline this process.
 
 This script helps you create secrets in Google Cloud Secret Manager and add your sensitive values (API keys, tokens).
 
-**IMPORTANT:** Before running, you **must** edit the `SECRETS` array inside `scripts/setup_secrets.sh` to include the *exact names* of the environment variables defined in your `.env` file (e.g., `TELEGRAM_BOT_TOKEN`, `TAVILY_API_KEY`, `X-API-KEY`, `GEMINI_API_KEY` etc.).
+**IMPORTANT:** Before running, you **must** edit the `SECRETS` array inside `scripts/setup_secrets.sh` to include the *exact names* of the environment variables defined in your `.env` file (e.g., `TELEGRAM_BOT_TOKEN`, `TAVILY_API_KEY`, `TWITTER_API_IO_KEY`, `GEMINI_API_KEY` etc.).
 
 ```bash
 # Make the script executable (only needed once)
@@ -253,7 +253,7 @@ Follow the prompts to enter your GCP Project ID (if not already configured) and 
 
 This script automates building the image, pushing it to Artifact Registry, deploying to Cloud Run, and setting the Telegram webhook.
 
-**IMPORTANT:** Before running, you **must** edit the `SECRETS_TO_MAP` array inside `scripts/deploy_cloud_run.sh`. This array defines how the secrets you created map to environment variables in your Cloud Run service. Ensure the secret names match those used in `setup_secrets.sh` (e.g., `X-API-KEY=x-api-key-secret-name:latest`).
+**IMPORTANT:** Before running, you **must** edit the `SECRETS_TO_MAP` array inside `scripts/deploy_cloud_run.sh`. This array defines how the secrets you created map to environment variables in your Cloud Run service. Ensure the secret names match those used in `setup_secrets.sh` (e.g., `TWITTER_API_IO_KEY=twitter-api-io-key-secret-name:latest`).
 
 ```bash
 # Make the script executable (only needed once)
@@ -298,15 +298,15 @@ The script will prompt you for your GCP Project ID, Region, Service Name, and Ar
     ```5.  **Manage Secrets with Secret Manager (Recommended):**
     Store API keys and tokens securely using Google Cloud Secret Manager. Use the `gcloud` CLI (as done by `setup_secrets.sh`):
 
-    *   **Create Secret:** (Example: `x-api-key` for the twitterapi.io key)
+    *   **Create Secret:** (Example: `twitter-api-io-key` for the twitterapi.io key)
         ```bash
-        gcloud secrets create x-api-key --replication-policy="automatic"
+        gcloud secrets create twitter-api-io-key --replication-policy="automatic"
         # Add others like tavily-api-key, telegram-bot-token, gemini-api-key, etc.
         ```
 
     *   **Add Secret Version:**
         ```bash
-        printf "YOUR_ACTUAL_TWITTERAPI_IO_KEY" | gcloud secrets versions add x-api-key --data-file=-
+        printf "YOUR_ACTUAL_TWITTERAPI_IO_KEY" | gcloud secrets versions add twitter-api-io-key --data-file=-
         # Add versions for other secrets...
         ```
 
@@ -319,7 +319,7 @@ The script will prompt you for your GCP Project ID, Region, Service Name, and Ar
     ```
 
 7.  **Deploy to Cloud Run:**
-    Replace `SECRET_NAME=SECRET_ID:latest,...` with your actual secret mappings, including `X-API-KEY`.
+    Replace `SECRET_NAME=SECRET_ID:latest,...` with your actual secret mappings, including `TWITTER_API_IO_KEY`.
     ```bash
     gcloud run deploy $SERVICE_NAME \
       --image $IMAGE_NAME \
@@ -327,8 +327,8 @@ The script will prompt you for your GCP Project ID, Region, Service Name, and Ar
       --region $REGION \
       --port 8080 \
       --allow-unauthenticated \
-      --set-secrets=TELEGRAM_BOT_TOKEN=telegram-bot-token:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest,X-API-KEY=x-api-key:latest,TELEGRAM_WEBHOOK_SECRET_TOKEN=webhook-secret-token:latest
-      # Adjust secret names (e.g., x-api-key, webhook-secret-token) and versions as needed
+      --set-secrets=TELEGRAM_BOT_TOKEN=telegram-bot-token:latest,TAVILY_API_KEY=tavily-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest,TWITTER_API_IO_KEY=twitter-api-io-key:latest,TELEGRAM_WEBHOOK_SECRET_TOKEN=webhook-secret-token:latest
+      # Adjust secret names (e.g., twitter-api-io-key, webhook-secret-token) and versions as needed
     ```
 
 8.  **Get Service URL & Set Telegram Webhook:**

@@ -8,10 +8,6 @@ from rich.console import Console
 load_dotenv()
 console = Console()
 
-API_BASE_URL = "https://api.twitterapi.io"
-# Try reading with underscore first (common in container envs), fallback to hyphen
-API_KEY = os.getenv("X_API_KEY") or os.getenv("X-API-KEY")
-
 
 def _parse_twitter_datetime(datetime_str: str) -> datetime:
     """Parses Twitter's datetime string into a timezone-aware datetime object."""
@@ -39,9 +35,13 @@ def fetch_tweet_thread(url: str) -> str:
     Returns:
         A string containing the formatted tweet thread, or an error message starting with "Error:".
     """
+    API_BASE_URL = "https://api.twitterapi.io"
+    # Try reading with underscore first (common in container envs), fallback to hyphen
+    API_KEY = os.getenv("TWITTER_API_IO_KEY")
+
     if not API_KEY:
         # Update error message to reflect both attempts
-        return "Error: X_API_KEY or X-API-KEY not found in environment variables."
+        return "Error: TWITTER_API_IO_KEY not found in environment variables."
 
     # 1. Extract Tweet ID
     match = re.search(r"/status(?:es)?/(\d+)", url)
