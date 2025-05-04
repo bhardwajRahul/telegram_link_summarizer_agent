@@ -16,7 +16,11 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 ## ✨ Features
 
 *   **Link Summarization:** Extracts content from URLs (webpages, PDFs, Twitter/X, LinkedIn posts) and provides summaries.
-*   **YouTube Support:** Extracts video description (and potentially transcript URL) using `yt-dlp` for summarization.
+*   **Robust YouTube Support:** Handles YouTube links using a fallback strategy:
+    1.  Attempts extraction using `yt-dlp`.
+    2.  If needed, fetches transcript via `youtube-transcript-api`.
+    3.  If needed, fetches description via YouTube Data API v3.
+    4.  If all YouTube methods fail, falls back to generic web extraction (Tavily).
 *   **LLM Routing:** Uses a BAML LLM function (`RouteRequest`) to determine the type of link (Webpage, PDF, Twitter, LinkedIn, Unsupported).
 *   **Web Search/Extraction:** Uses Tavily for standard webpage content extraction.
 *   **PDF Support:** Can process and summarize PDF documents found at URLs.
@@ -30,7 +34,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 
 *   **Routing/Summarization:** BAML (Boundary) + LLM (e.g., Gemini, Deepseek)
 *   **Orchestration:** LangGraph
-*   **YouTube Extraction:** `yt-dlp`
+*   **YouTube Extraction:** `yt-dlp`, `youtube-transcript-api`, `google-api-python-client` (YouTube Data API v3 is required to be enabled on GCP console)
 *   **Twitter/X API:** `twitterapi.io` via `requests`
 *   **Web Extraction:** Tavily Search SDK
 *   **LinkedIn Extraction:** Tavily Search SDK (via `linkedin_scraper_tool.py`)
@@ -64,6 +68,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
     # Select *one* LLM provider for BAML functions (or configure multi-provider
     # GEMINI_API_KEY="your_google_gemini_api_key" # For Google LLMs
     DEEPSEEK_API_KEY="your_deepseek_api_key" # For Deepseek LLMs
+    GOOGLE_API_KEY="your_google_cloud_api_key" # with YouTube Data API v3 enabled on GCP console for youtube extractor fallback
 
     # Tools
     TAVILY_API_KEY="your_tavily_api_key"

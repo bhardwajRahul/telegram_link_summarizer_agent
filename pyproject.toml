@@ -35,6 +35,8 @@ dependencies = [
     "anyio>=4.9.0",
     "nest-asyncio>=1.6.0",
     "yt-dlp>=2025.4.30",
+    "youtube-transcript-api>=1.0.3",
+    "google-api-python-client>=2.169.0",
 ]
 
 [tool.setuptools]

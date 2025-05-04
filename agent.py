@@ -1,7 +1,7 @@
 import os
 import re
 import logging  # Added for youtube scraper logging visibility
-from typing import Any, Dict, TypedDict, Union
+from typing import Any, Dict, TypedDict, Union, Optional
 
 from baml_client import b
 from baml_client.types import ContentType, Summary, ExtractorTool
@@ -13,7 +13,7 @@ from tools.search import run_tavily_tool
 from tools.pdf_handler import get_pdf_text
 from tools.twitter_api_tool import fetch_tweet_thread
 from tools.linkedin_scraper_tool import scrape_linkedin_post
-from tools.youtube_scraper import fetch_youtube_info  # Import the new tool
+from tools.youtube_scraper import fetch_youtube_content_with_fallbacks
 
 load_dotenv()
 
@@ -24,6 +24,7 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce noise from http libraries
+logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
 # --- LangGraph Agent State ---
 
@@ -31,11 +32,12 @@ logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce noise from http l
 class AgentState(TypedDict):
     original_message: str
     url: str
-    content_type: ContentType  # 'web' or 'pdf'
+    content_type: ContentType  # 'web' or 'pdf' or others?
     content: str
     summary: str
-    error: str | None
-    route_decision: str | None  # To store the routing decision string
+    error: Optional[str]
+    route_decision: Optional[str]  # To store the routing decision string
+    needs_web_fallback: bool  # Flag for YouTube fallback
 
 
 # --- Define Graph Nodes ---
@@ -55,11 +57,12 @@ def init_state(state: AgentState) -> Dict[str, Any]:
     return {
         "original_message": message,
         "url": url if url else "",  # Ensure url is always a string
-        "content_type": ContentType.Webpage,
+        "content_type": ContentType.Webpage,  # Default, gets updated later
         "content": "",
         "summary": "",
         "error": error,
         "route_decision": None,
+        "needs_web_fallback": False,  # Initialize flag
     }
 
 
@@ -113,15 +116,16 @@ async def llm_router(state: AgentState) -> Dict[str, Any]:
         routing_error = f"LLM Router failed: {e}"
         decision = "__error__"
 
+    # Update the state dictionary
     return {
         "route_decision": decision,
         "error": routing_error,  # Overwrite previous error state if routing fails
     }
 
 
-def get_web_content(state: AgentState) -> AgentState:
+def get_web_content(state: AgentState) -> Dict[str, Any]:
     """Fetches content from a standard webpage URL using Tavily extract."""
-    console.print("---GET WEB CONTENT (Tavily Extract)---", style="yellow bold")
+    console.print("---GET WEB CONTENT (Tavily Extract)--- ", style="yellow bold")
     url = state["url"]
     error_message = None
     content_source = ""
@@ -129,6 +133,8 @@ def get_web_content(state: AgentState) -> AgentState:
 
     # Reset error from previous steps if any
     state["error"] = None
+    # Reset fallback flag if we reached here directly or as fallback
+    state["needs_web_fallback"] = False
 
     try:
         # Use Tavily extract for non-Twitter URLs
@@ -172,16 +178,17 @@ def get_web_content(state: AgentState) -> AgentState:
         content_source = ""  # Ensure content is empty on error
 
     return {
-        **state,
+        # **state, # Don't spread the entire state, just update relevant fields
         "content_type": content_type,
         "content": content_source.strip(),  # Strip leading/trailing whitespace
         "error": error_message,
+        "needs_web_fallback": False,  # Explicitly set to false after web extraction
     }
 
 
-def get_twitter_content(state: AgentState) -> AgentState:
+def get_twitter_content(state: AgentState) -> Dict[str, Any]:
     """Fetches content from a Twitter/X URL using twitter_api_tool."""
-    console.print("---GET TWITTER/X CONTENT (twitterapi.io)---", style="yellow bold")
+    console.print("---GET TWITTER/X CONTENT (twitterapi.io)--- ", style="yellow bold")
     url = state["url"]
     error_message = None
     content_result = ""
@@ -189,6 +196,7 @@ def get_twitter_content(state: AgentState) -> AgentState:
 
     # Reset error from previous steps if any
     state["error"] = None
+    state["needs_web_fallback"] = False  # Reset flag
 
     try:
         console.print(f"Fetching tweet thread for URL: {url}", style="cyan")
@@ -223,17 +231,18 @@ def get_twitter_content(state: AgentState) -> AgentState:
         content_result = ""
 
     return {
-        **state,
+        # **state,
         "content_type": content_type,
         "content": content_result.strip(),
         "error": error_message,
+        "needs_web_fallback": False,
     }
 
 
-def get_linkedin_content(state: AgentState) -> AgentState:
+def get_linkedin_content(state: AgentState) -> Dict[str, Any]:
     """Fetches content from a LinkedIn post URL using linkedin_scraper_tool."""
     console.print(
-        "---GET LINKEDIN CONTENT (linkedin_scraper_tool)---", style="yellow bold"
+        "---GET LINKEDIN CONTENT (linkedin_scraper_tool)--- ", style="yellow bold"
     )
     url = state["url"]
     error_message = None
@@ -244,6 +253,7 @@ def get_linkedin_content(state: AgentState) -> AgentState:
 
     # Reset error from previous steps if any
     state["error"] = None
+    state["needs_web_fallback"] = False  # Reset flag
 
     try:
         console.print(f"Fetching LinkedIn post content for URL: {url}", style="cyan")
@@ -286,82 +296,64 @@ def get_linkedin_content(state: AgentState) -> AgentState:
         content_result = ""
 
     return {
-        **state,
+        # **state,
         "content_type": content_type,
         "content": content_result.strip(),
         "error": error_message,
+        "needs_web_fallback": False,
     }
 
 
-def get_youtube_content(state: AgentState) -> AgentState:
-    """Fetches content (description) from a YouTube URL using youtube_scraper."""
-    console.print("---GET YOUTUBE CONTENT (yt-dlp)--- ", style="yellow bold")
+def get_youtube_content(state: AgentState) -> Dict[str, Any]:
+    """Fetches content (description/transcript) using youtube_scraper with fallbacks."""
+    console.print(
+        "---GET YOUTUBE CONTENT (yt-dlp + Fallbacks)--- ", style="yellow bold"
+    )
     url = state["url"]
     error_message = None
     content_result = ""
-    # For YouTube, let's treat the content type as Webpage for the summarizer
+    needs_fallback = False
+    # For YouTube, let's treat the content type as Webpage for the summarizer initially
     content_type = ContentType.Webpage
 
-    # Reset error from previous steps if any
+    # Reset error and fallback flag from previous steps if any
     state["error"] = None
+    state["needs_web_fallback"] = False
 
     try:
         console.print(f"Fetching YouTube info for URL: {url}", style="cyan")
-        # Use the YouTube tool
-        result = fetch_youtube_info(url)
+        # Use the new YouTube tool with fallbacks
+        result = fetch_youtube_content_with_fallbacks(url)
 
-        # Check if the tool returned an error string
-        if isinstance(result, str) and result.startswith("Error:"):
-            error_message = result
+        # Check if the tool returned the specific fallback error
+        if (
+            isinstance(result, dict)
+            and result.get("error") == "youtube_fallback_failed"
+        ):
+            error_message = f"YouTube scraping failed after trying all methods. Details: {result.get('details', 'N/A')}"
+            console.print(
+                f"YouTube fetch failed: {error_message}. Triggering web fallback.",
+                style="yellow",
+            )
+            content_result = ""  # Ensure content is empty
+            needs_fallback = True
+            # Clear the error message for the state, as we are handling it via fallback
+            error_message = None
+        # Check if the tool returned a different error dictionary
+        elif isinstance(result, dict) and "error" in result:
+            error_message = f"YouTube tool encountered an error: {result['error']}"
             console.print(error_message, style="red bold")
-            content_result = ""  # Ensure content is empty if tool errored
-        # Check if the tool returned info (dict)
-        elif isinstance(result, dict):
-            description = result.get("description")
-            transcript_url = result.get(
-                "transcript_url"
-            )  # Store for potential future use
-
-            if description:
-                content_result = f"Video Description:\n{description}\n"
-                console.print(
-                    f"Successfully fetched YouTube description for: {url}",
-                    style="green",
-                )
-                # TODO: Optionally fetch and append transcript content here if transcript_url exists
-                # if transcript_url:
-                #    try:
-                #        # Basic transcript fetching (implement robustly)
-                #        response = requests.get(transcript_url, timeout=10)
-                #        response.raise_for_status()
-                #        # Basic cleaning (SRT/VTT parsing needed for clean text)
-                #        transcript_text = response.text
-                #        content_result += f"\n\nVideo Transcript (Raw):\n{transcript_text[:1000]}..."
-                #        console.print("Appended raw transcript segment.", style="green")
-                #    except Exception as transcript_e:
-                #        console.print(f"Failed to fetch/process transcript: {transcript_e}", style="yellow")
-            elif transcript_url:
-                content_result = (
-                    "Video description was empty. Transcript might be available."
-                )
-                # We could attempt to fetch transcript here even without description
-                console.print(
-                    "YouTube description empty, transcript URL found.", style="yellow"
-                )
-            else:
-                content_result = "Video description and transcript URL were not found."
-                # This might be considered an error or just lack of data
-                error_message = (
-                    "YouTube tool returned no description or transcript URL."
-                )
-                console.print(error_message, style="yellow")
-
-            # Ensure content_result is a string even if description was None
-            if not isinstance(content_result, str):
-                content_result = str(
-                    content_result if content_result is not None else ""
-                )
-
+            content_result = ""
+            needs_fallback = False  # Don't fallback on general errors
+        # Check if the tool returned content successfully (string)
+        elif isinstance(result, str):
+            content_result = result
+            console.print(
+                f"Successfully fetched YouTube content (description/transcript) for: {url}",
+                style="green",
+            )
+            needs_fallback = False
+            error_message = None  # Clear any previous transient errors
         # Handle unexpected return types
         else:
             error_message = (
@@ -369,35 +361,37 @@ def get_youtube_content(state: AgentState) -> AgentState:
             )
             console.print(error_message, style="yellow")
             content_result = ""
+            needs_fallback = False
 
     except Exception as e:
         console.print(
-            f"Unexpected error calling fetch_youtube_info for {url}: {e}",
+            f"Unexpected error calling fetch_youtube_content_with_fallbacks for {url}: {e}",
             style="red bold",
             exc_info=True,  # Include traceback for unexpected errors
         )
-        error_message = (
-            f"Error: An unexpected error occurred while calling the YouTube tool. {e}"
-        )
+        error_message = f"Error: An unexpected error occurred while calling the YouTube tool function. {e}"
         content_result = ""
+        needs_fallback = False
 
     return {
-        **state,
+        # **state,
         "content_type": content_type,
         "content": content_result.strip(),
-        "error": error_message,
+        "error": error_message,  # Will be None if falling back
+        "needs_web_fallback": needs_fallback,
     }
 
 
-def handle_pdf_content(state: AgentState) -> AgentState:
+def handle_pdf_content(state: AgentState) -> Dict[str, Any]:
     """Downloads and extracts text from a PDF URL."""
-    console.print("---HANDLE PDF CONTENT---", style="bold yellow")
+    console.print("---HANDLE PDF CONTENT--- ", style="bold yellow")
     url = state["url"]
     error_message = None
     pdf_text = ""
 
     # Reset error from previous steps if any
     state["error"] = None
+    state["needs_web_fallback"] = False  # Reset flag
 
     try:
         extracted_text = get_pdf_text(url)
@@ -425,16 +419,17 @@ def handle_pdf_content(state: AgentState) -> AgentState:
         )
 
     return {
-        **state,
+        # **state,
         "content": pdf_text.strip(),
         "content_type": ContentType.PDF,
         "error": error_message,
+        "needs_web_fallback": False,
     }
 
 
-async def summarize_content(state: AgentState) -> AgentState:
+async def summarize_content(state: AgentState) -> Dict[str, Any]:
     """Summarizes the extracted content using BAML."""
-    console.print("---SUMMARIZE CONTENT---", style="bold green")
+    console.print("---SUMMARIZE CONTENT--- ", style="bold green")
 
     content_to_summarize = state.get("content")
 
@@ -444,7 +439,7 @@ async def summarize_content(state: AgentState) -> AgentState:
             f"Skipping summarization due to previous error: {state['error']}",
             style="yellow",
         )
-        return {**state, "summary": ""}  # Keep existing error
+        return {"summary": "", "error": state["error"]}  # Keep existing error
 
     if not content_to_summarize or content_to_summarize.strip() == "":
         console.print("No content available to summarize.", style="yellow")
@@ -452,7 +447,6 @@ async def summarize_content(state: AgentState) -> AgentState:
         # Otherwise, set an error indicating no content.
         final_error = state.get("error") or "No content found to summarize."
         return {
-            **state,
             "summary": "",
             "error": final_error,
         }
@@ -463,14 +457,15 @@ async def summarize_content(state: AgentState) -> AgentState:
 
     try:
         console.print(
-            f"--- Debug: Summarizing {len(content_to_summarize)} chars ---", style="dim"
+            f"--- Debug: Summarizing {len(content_to_summarize)} chars --- ",
+            style="dim",
         )
         # Ensure content_type is valid, default to Webpage if missing/invalid
         content_type = state.get("content_type", ContentType.Webpage)
         if not isinstance(content_type, ContentType):
             content_type = ContentType.Webpage  # Default fallback
 
-        # Call the BAML function (synchronously, as it's not declared async in BAML)
+        # Call the BAML function (assuming it's synchronous based on definition)
         summary_result: Summary = b.SummarizeContent(
             content=content_to_summarize,
             content_type=content_type,
@@ -510,9 +505,8 @@ async def summarize_content(state: AgentState) -> AgentState:
         summarization_error = f"Summarization failed: {e}"
         formatted_summary = ""  # Ensure summary is empty on error
 
-    # Keep the routing decision but update summary and error
+    # Return only summary and error, let graph manage state merge
     return {
-        **state,
         "summary": formatted_summary,
         "error": summarization_error,  # Overwrite previous errors only if summarization fails
     }
@@ -556,8 +550,15 @@ def route_based_on_llm(state: AgentState) -> str:
             style="red",
         )
         # Ensure error state reflects this if not already set
-        if not state.get("error"):
-            state["error"] = f"Invalid routing decision: {decision}"
+        current_error = state.get("error")
+        if not current_error:
+            # Update state directly is tricky in conditional functions.
+            # Ideally, the router node should set the error if decision is __error__.
+            # For now, just log and route to end.
+            console.print(
+                f"Setting error state due to invalid routing: {decision}", style="red"
+            )
+            # state["error"] = f"Invalid routing decision: {decision}"
         return END
 
 
@@ -566,8 +567,21 @@ def should_summarize(state: AgentState) -> str:
     content = state.get("content")
     error = state.get("error")  # Check error from the *extractor* node
     has_content = content and isinstance(content, str) and content.strip() != ""
+    needs_fallback = state.get("needs_web_fallback", False)
 
-    if error:
+    # Decision Priority:
+    # 1. Fallback needed?
+    # 2. Error occurred?
+    # 3. Content available?
+    # 4. No content, no error?
+
+    if needs_fallback:
+        console.print(
+            "Routing after Extraction: YouTube fallback failed, routing to Web Extractor.",
+            style="yellow",
+        )
+        return "web_extractor"  # Route to web extractor as the last resort
+    elif error:
         console.print(
             f"Routing after Extraction: Error occurred ('{error}'), routing to END.",
             style="red",
@@ -585,9 +599,14 @@ def should_summarize(state: AgentState) -> str:
             style="yellow",
         )
         # Set an error if none exists from the extractor
-        state["error"] = (
-            state.get("error") or "Content extraction finished with no content."
-        )
+        current_error = state.get("error")
+        final_error = current_error or "Content extraction finished with no content."
+        # state["error"] = final_error # Avoid direct state modification here
+        console.print(f"Setting error state: {final_error}", style="yellow")
+        # How to set error state correctly before END?
+        # LangGraph merges the partial state returned by the node *after* the edge logic.
+        # We might need an explicit error handling node.
+        # For now, just route to END. The final state check should catch the lack of summary.
         return END
 
 
@@ -628,12 +647,14 @@ def build_graph():
     )
 
     # Route from each extractor to the summarization check
+    # Note: The should_summarize function now handles routing to web_extractor for YouTube fallback
     workflow.add_conditional_edges(
         "web_extractor",
         should_summarize,
         {
             "summarize_content": "summarize_content",
             END: END,
+            # No web_extractor fallback from web_extractor itself
         },
     )
     workflow.add_conditional_edges(
@@ -642,6 +663,7 @@ def build_graph():
         {
             "summarize_content": "summarize_content",
             END: END,
+            # No web_extractor fallback needed from pdf
         },
     )
     workflow.add_conditional_edges(
@@ -650,6 +672,7 @@ def build_graph():
         {
             "summarize_content": "summarize_content",
             END: END,
+            # No web_extractor fallback needed from twitter
         },
     )
     workflow.add_conditional_edges(
@@ -658,13 +681,15 @@ def build_graph():
         {
             "summarize_content": "summarize_content",
             END: END,
+            # No web_extractor fallback needed from linkedin
         },
     )
     workflow.add_conditional_edges(
-        "youtube_extractor",  # Add edges from new node
-        should_summarize,
+        "youtube_extractor",  # Edges from YouTube extractor
+        should_summarize,  # Use the same logic function, now enhanced
         {
             "summarize_content": "summarize_content",
+            "web_extractor": "web_extractor",  # Add the fallback path
             END: END,
         },
     )
@@ -696,7 +721,9 @@ async def run_agent(message: str) -> Union[str, None]:
     final_state = None
     try:
         # Use graph.astream for async execution
-        async for output in graph.astream(inputs, {"recursion_limit": 10}):
+        async for output in graph.astream(
+            inputs, {"recursion_limit": 15}
+        ):  # Increased recursion limit
             # output is a dictionary where keys are node names and values are states after the node ran
             # We are interested in the state *after* the last node executes
             node_name = list(output.keys())[0]
@@ -707,7 +734,7 @@ async def run_agent(message: str) -> Union[str, None]:
 
         if final_state:
             # Debug: Print the final state (simplified)
-            console.print("---FINAL STATE---", style="bold magenta")
+            console.print("---FINAL STATE--- ", style="bold magenta")
             # Sort keys for consistent output order
             state_keys = sorted(final_state.keys())
             for key in state_keys:
@@ -729,7 +756,7 @@ async def run_agent(message: str) -> Union[str, None]:
 
             # 1. Successful Summary (even if there were intermediate, recoverable errors)
             if summary_text and isinstance(summary_text, str) and summary_text.strip():
-                console.print("---AGENT FINISHED: Summary---", style="bold green")
+                console.print("---AGENT FINISHED: Summary--- ", style="bold green")
                 # If an error occurred *before* summarization, but summarization *still* happened
                 # (e.g. fallback content used), we might want to mention the error.
                 # For now, prioritize showing the summary if available.
@@ -740,7 +767,7 @@ async def run_agent(message: str) -> Union[str, None]:
             # 2. Error occurred (could be init, routing, extraction, or summarization error)
             elif final_error:
                 console.print(
-                    f"---AGENT FINISHED: Error ('{final_error}')---", style="bold red"
+                    f"---AGENT FINISHED: Error ('{final_error}')--- ", style="bold red"
                 )
                 # Ensure the error message is prefixed consistently
                 if isinstance(final_error, str) and final_error.lower().startswith(
@@ -754,20 +781,24 @@ async def run_agent(message: str) -> Union[str, None]:
             #    but could occur if summarizer returns empty without error)
             else:
                 console.print(
-                    "---AGENT FINISHED: No Summary/No Error---", style="bold yellow"
+                    "---AGENT FINISHED: No Summary/No Error--- ", style="bold yellow"
                 )
                 # Provide a more specific fallback message
                 if not final_state.get("content"):
-                    return "Error: Agent finished without extracting content."
+                    # Check if it was an unsupported URL type initially
+                    if final_state.get("route_decision") == "__unsupported__":
+                        return "Error: The provided link type is not supported or no URL was found."
+                    else:
+                        return "Error: Agent finished without extracting content."
                 else:
                     return "Error: Agent finished. Content was extracted, but no summary was generated and no specific error was reported."
 
         else:
-            console.print("---AGENT FAILED: No Final State---", style="bold red")
+            console.print("---AGENT FAILED: No Final State--- ", style="bold red")
             return "Error: Agent workflow did not produce a final state."
 
     except Exception as e:
-        console.print("---AGENT FAILED: Runtime Exception---", style="bold red")
+        console.print("---AGENT FAILED: Runtime Exception--- ", style="bold red")
         console.print_exception(show_locals=False)
         # Ensure the exception is converted to a string for the return value
         return "Error: An unexpected error occurred in the agent: " + str(e)
@@ -800,24 +831,29 @@ if __name__ == "__main__":
     test_url_msg_unsupported = "Check this out: ftp://files.example.com/data.zip"
     # YouTube URL (Router should pick Youtube)
     test_url_msg_youtube = "Summarize this video: https://www.youtube.com/watch?v=DPXG4pdPj44"  # URL from youtube_scraper test
+    # YouTube URL that requires login (Should fallback to Tavily)
+    test_url_msg_youtube_login = (
+        "Summarize: https://www.youtube.com/watch?v=hhMXE9-JUAc"  # Test fallback
+    )
 
     async def main():
         test_cases = {
-            "Twitter": test_url_msg_twitter,
-            "Web": test_url_msg_web,
-            "PDF": test_url_msg_pdf,
+            # "Twitter": test_url_msg_twitter,
+            # "Web": test_url_msg_web,
+            # "PDF": test_url_msg_pdf,
             # "Web Fail": test_url_msg_fail, # May take time
-            "LinkedIn": test_url_msg_linkedin,
-            "No URL": test_url_msg_nourl,
-            "Unsupported FTP": test_url_msg_unsupported,
-            "YouTube": test_url_msg_youtube,  # Add YouTube test case
+            # "LinkedIn": test_url_msg_linkedin,
+            # "No URL": test_url_msg_nourl,
+            # "Unsupported FTP": test_url_msg_unsupported,
+            "YouTube": test_url_msg_youtube,
+            "YouTube Needs Login": test_url_msg_youtube_login,  # Test fallback
         }
 
         for name, msg in test_cases.items():
             print(f"\n{'=/' * 10} RUNNING TEST: {name} {'=/' * 10}")
             print(f"Input message: {msg}")
             result = await run_agent(msg)
-            print("\n--- FINAL RESULT ---")
+            print("\n--- FINAL RESULT --- ")
             if result:
                 # Ensure result is treated as a string before printing
                 print(str(result))
