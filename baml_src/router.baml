@@ -5,6 +5,7 @@ enum ExtractorTool {
   TwitterExtractor // For Twitter/X URLs
   LinkedInExtractor // For LinkedIn post URLs
   Unsupported      // For URLs or content types we cannot handle
+  YoutubeExtractor // For YouTube video URLs
 }
 
 // Define the router function
@@ -27,6 +28,7 @@ function RouteRequest(original_message: string) -> ExtractorTool {
     - If the URL points to a PDF file (ends with .pdf), choose PDFExtractor.
     - If the URL is from Twitter or X (contains twitter.com or x.com), choose TwitterExtractor.
     - If the URL is a LinkedIn post (contains linkedin.com/posts/), choose LinkedInExtractor.
+    - If the URL is a YouTube video (contains youtube.com/watch or youtu.be/), choose YoutubeExtractor.
     - For all other standard web URLs (http or https), choose WebpageExtractor.
     - If no URL is found, or the URL type is clearly unsupported (e.g., ftp://, mailto:), choose Unsupported.
 
@@ -76,6 +78,13 @@ test RouteUnsupported {
   functions [RouteRequest]
   args {
     original_message #"Check this out: ftp://files.example.com/data.zip"#
+  }
+}
+
+test RouteYouTube {
+  functions [RouteRequest]
+  args {
+    original_message #"Summarize this video: https://www.youtube.com/watch?v=dQw4w9WgXcQ"#
   }
 }
 

@@ -16,6 +16,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 ## ✨ Features
 
 *   **Link Summarization:** Extracts content from URLs (webpages, PDFs, Twitter/X, LinkedIn posts) and provides summaries.
+*   **YouTube Support:** Extracts video description (and potentially transcript URL) using `yt-dlp` for summarization.
 *   **LLM Routing:** Uses a BAML LLM function (`RouteRequest`) to determine the type of link (Webpage, PDF, Twitter, LinkedIn, Unsupported).
 *   **Web Search/Extraction:** Uses Tavily for standard webpage content extraction.
 *   **PDF Support:** Can process and summarize PDF documents found at URLs.
@@ -29,6 +30,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 
 *   **Routing/Summarization:** BAML (Boundary) + LLM (e.g., Gemini, Deepseek)
 *   **Orchestration:** LangGraph
+*   **YouTube Extraction:** `yt-dlp`
 *   **Twitter/X API:** `twitterapi.io` via `requests`
 *   **Web Extraction:** Tavily Search SDK
 *   **LinkedIn Extraction:** Tavily Search SDK (via `linkedin_scraper_tool.py`)

@@ -53,6 +53,7 @@ class ExtractorTool(str, Enum):
     TwitterExtractor = "TwitterExtractor"
     LinkedInExtractor = "LinkedInExtractor"
     Unsupported = "Unsupported"
+    YoutubeExtractor = "YoutubeExtractor"
 
 class Summary(BaseModel):
     title: str

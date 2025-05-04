@@ -1,5 +1,6 @@
 import os
 import re
+import logging  # Added for youtube scraper logging visibility
 from typing import Any, Dict, TypedDict, Union
 
 from baml_client import b
@@ -12,10 +13,17 @@ from tools.search import run_tavily_tool
 from tools.pdf_handler import get_pdf_text
 from tools.twitter_api_tool import fetch_tweet_thread
 from tools.linkedin_scraper_tool import scrape_linkedin_post
+from tools.youtube_scraper import fetch_youtube_info  # Import the new tool
 
 load_dotenv()
 
 console = Console()
+
+# Configure logging slightly for better visibility from tools
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce noise from http libraries
 
 # --- LangGraph Agent State ---
 
@@ -88,6 +96,8 @@ async def llm_router(state: AgentState) -> Dict[str, Any]:
             decision = "twitter_extractor"
         elif route_result == ExtractorTool.LinkedInExtractor:
             decision = "linkedin_extractor"
+        elif route_result == ExtractorTool.YoutubeExtractor:
+            decision = "youtube_extractor"  # Added Youtube route
         elif route_result == ExtractorTool.Unsupported:
             decision = "__unsupported__"
             routing_error = "Unsupported URL type or no URL found by LLM Router."
@@ -283,6 +293,102 @@ def get_linkedin_content(state: AgentState) -> AgentState:
     }
 
 
+def get_youtube_content(state: AgentState) -> AgentState:
+    """Fetches content (description) from a YouTube URL using youtube_scraper."""
+    console.print("---GET YOUTUBE CONTENT (yt-dlp)--- ", style="yellow bold")
+    url = state["url"]
+    error_message = None
+    content_result = ""
+    # For YouTube, let's treat the content type as Webpage for the summarizer
+    content_type = ContentType.Webpage
+
+    # Reset error from previous steps if any
+    state["error"] = None
+
+    try:
+        console.print(f"Fetching YouTube info for URL: {url}", style="cyan")
+        # Use the YouTube tool
+        result = fetch_youtube_info(url)
+
+        # Check if the tool returned an error string
+        if isinstance(result, str) and result.startswith("Error:"):
+            error_message = result
+            console.print(error_message, style="red bold")
+            content_result = ""  # Ensure content is empty if tool errored
+        # Check if the tool returned info (dict)
+        elif isinstance(result, dict):
+            description = result.get("description")
+            transcript_url = result.get(
+                "transcript_url"
+            )  # Store for potential future use
+
+            if description:
+                content_result = f"Video Description:\n{description}\n"
+                console.print(
+                    f"Successfully fetched YouTube description for: {url}",
+                    style="green",
+                )
+                # TODO: Optionally fetch and append transcript content here if transcript_url exists
+                # if transcript_url:
+                #    try:
+                #        # Basic transcript fetching (implement robustly)
+                #        response = requests.get(transcript_url, timeout=10)
+                #        response.raise_for_status()
+                #        # Basic cleaning (SRT/VTT parsing needed for clean text)
+                #        transcript_text = response.text
+                #        content_result += f"\n\nVideo Transcript (Raw):\n{transcript_text[:1000]}..."
+                #        console.print("Appended raw transcript segment.", style="green")
+                #    except Exception as transcript_e:
+                #        console.print(f"Failed to fetch/process transcript: {transcript_e}", style="yellow")
+            elif transcript_url:
+                content_result = (
+                    "Video description was empty. Transcript might be available."
+                )
+                # We could attempt to fetch transcript here even without description
+                console.print(
+                    "YouTube description empty, transcript URL found.", style="yellow"
+                )
+            else:
+                content_result = "Video description and transcript URL were not found."
+                # This might be considered an error or just lack of data
+                error_message = (
+                    "YouTube tool returned no description or transcript URL."
+                )
+                console.print(error_message, style="yellow")
+
+            # Ensure content_result is a string even if description was None
+            if not isinstance(content_result, str):
+                content_result = str(
+                    content_result if content_result is not None else ""
+                )
+
+        # Handle unexpected return types
+        else:
+            error_message = (
+                f"YouTube tool returned unexpected result type: {type(result)}"
+            )
+            console.print(error_message, style="yellow")
+            content_result = ""
+
+    except Exception as e:
+        console.print(
+            f"Unexpected error calling fetch_youtube_info for {url}: {e}",
+            style="red bold",
+            exc_info=True,  # Include traceback for unexpected errors
+        )
+        error_message = (
+            f"Error: An unexpected error occurred while calling the YouTube tool. {e}"
+        )
+        content_result = ""
+
+    return {
+        **state,
+        "content_type": content_type,
+        "content": content_result.strip(),
+        "error": error_message,
+    }
+
+
 def handle_pdf_content(state: AgentState) -> AgentState:
     """Downloads and extracts text from a PDF URL."""
     console.print("---HANDLE PDF CONTENT---", style="bold yellow")
@@ -437,6 +543,9 @@ def route_based_on_llm(state: AgentState) -> str:
     elif decision == "linkedin_extractor":
         console.print(f"LLM Routed to: LinkedIn Extractor", style="magenta")
         return "linkedin_extractor"
+    elif decision == "youtube_extractor":
+        console.print(f"LLM Routed to: YouTube Extractor", style="magenta")
+        return "youtube_extractor"  # Added Youtube route
     elif decision == "__unsupported__":
         console.print("LLM Routed to: Unsupported -> END", style="yellow")
         # Error message should already be set by the router node
@@ -495,6 +604,7 @@ def build_graph():
     workflow.add_node("pdf_extractor", handle_pdf_content)
     workflow.add_node("twitter_extractor", get_twitter_content)
     workflow.add_node("linkedin_extractor", get_linkedin_content)
+    workflow.add_node("youtube_extractor", get_youtube_content)  # Add new node
     workflow.add_node("summarize_content", summarize_content)
 
     # Define edges
@@ -512,6 +622,7 @@ def build_graph():
             "pdf_extractor": "pdf_extractor",
             "twitter_extractor": "twitter_extractor",
             "linkedin_extractor": "linkedin_extractor",
+            "youtube_extractor": "youtube_extractor",  # Add edge to new node
             END: END,  # Handles errors and unsupported cases from the router
         },
     )
@@ -543,6 +654,14 @@ def build_graph():
     )
     workflow.add_conditional_edges(
         "linkedin_extractor",
+        should_summarize,
+        {
+            "summarize_content": "summarize_content",
+            END: END,
+        },
+    )
+    workflow.add_conditional_edges(
+        "youtube_extractor",  # Add edges from new node
         should_summarize,
         {
             "summarize_content": "summarize_content",
@@ -679,6 +798,8 @@ if __name__ == "__main__":
     test_url_msg_nourl = "Hello, how are you?"
     # Unsupported URL Type (Router should pick Unsupported)
     test_url_msg_unsupported = "Check this out: ftp://files.example.com/data.zip"
+    # YouTube URL (Router should pick Youtube)
+    test_url_msg_youtube = "Summarize this video: https://www.youtube.com/watch?v=DPXG4pdPj44"  # URL from youtube_scraper test
 
     async def main():
         test_cases = {
@@ -689,6 +810,7 @@ if __name__ == "__main__":
             "LinkedIn": test_url_msg_linkedin,
             "No URL": test_url_msg_nourl,
             "Unsupported FTP": test_url_msg_unsupported,
+            "YouTube": test_url_msg_youtube,  # Add YouTube test case
         }
 
         for name, msg in test_cases.items():
