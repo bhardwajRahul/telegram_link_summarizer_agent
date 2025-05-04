@@ -361,3 +361,7 @@ This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE
 ---
 
 **Stay updated:** [Join the Telegram Channel @tech_links](https://t.me/tech_links) for the latest news and interesting links. If you find this project useful, please consider starring the repository.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=kargarisaac/telegram_link_summarizer_agent&type=Date)](https://www.star-history.com/#kargarisaac/telegram_link_summarizer_agent&Date)
