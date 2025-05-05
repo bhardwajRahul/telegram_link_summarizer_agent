@@ -27,7 +27,7 @@ logging.getLogger("googleapiclient.discovery_cache").setLevel(
 )  # Silence noisy cache logs
 
 # Constants
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # --- Helper Functions ---
 
@@ -170,8 +170,8 @@ def _try_youtube_data_api(video_id: str) -> Tuple[Optional[str], Optional[str]]:
     Returns:
         Tuple (description, error_message)
     """
-    if not GOOGLE_API_KEY:
-        return None, "YouTube Data API Error: GOOGLE_API_KEY not configured."
+    if not GEMINI_API_KEY:
+        return None, "YouTube Data API Error: GEMINI_API_KEY not configured."
 
     log.info(f"Attempting description fetch via YouTube Data API for ID: {video_id}")
     description = None
@@ -179,7 +179,7 @@ def _try_youtube_data_api(video_id: str) -> Tuple[Optional[str], Optional[str]]:
 
     try:
         youtube = build(
-            "youtube", "v3", developerKey=GOOGLE_API_KEY, cache_discovery=False
+            "youtube", "v3", developerKey=GEMINI_API_KEY, cache_discovery=False
         )  # Disable cache
         request = youtube.videos().list(part="snippet", id=video_id)
         response = request.execute()
