@@ -182,11 +182,11 @@ async def lifespan(app: FastAPI):
         )
         logger.info(f"Setting webhook to: {full_webhook_url}")
         try:
-            await ptb_app.bot.set_webhook(
-                url=full_webhook_url,
-                secret_token=os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN"),
-                allowed_updates=Update.ALL_TYPES,  # Optional: specify which updates you want
-            )
+            # await ptb_app.bot.set_webhook(
+            #     url=full_webhook_url,
+            #     secret_token=os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN"),
+            #     allowed_updates=Update.ALL_TYPES,  # Optional: specify which updates you want
+            # )
             await ptb_app.start()
             logger.info("Webhook set successfully.")
         except Exception as e:
@@ -272,11 +272,15 @@ async def webhook(
             )
 
         # Process the update
-        logger.info("Processing update with PTB application...")
-        await ptb_app.process_update(update)
-        logger.info(f"Successfully processed update {update.update_id}")
+        # logger.info("Processing update with PTB application...")
+        # await ptb_app.process_update(update)
+        # logger.info(f"Successfully processed update {update.update_id}")
 
-        return {"ok": True}
+        # Kick off processing in the background and ACK Telegram immediately
+        logger.info("Scheduling background processing...")
+        asyncio.create_task(ptb_app.process_update(update))
+        return {"ok": True}  # must be <10 s
+
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse webhook request JSON: {e}", exc_info=True)
         return {"ok": False, "error": "Invalid JSON"}
