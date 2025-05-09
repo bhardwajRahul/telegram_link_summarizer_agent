@@ -14,6 +14,9 @@ from youtube_transcript_api import (
 )
 from yt_dlp import YoutubeDL
 
+# Import the new BeautifulSoup scraper
+from tools.youtube_scraper_bs import fetch_youtube_description_bs
+
 # Load environment variables
 load_dotenv()
 
@@ -214,7 +217,8 @@ def fetch_youtube_content_with_fallbacks(url: str) -> Union[str, Dict[str, str]]
     """
     Fetches YouTube video description and transcript using multiple methods with fallbacks.
 
-    Tries methods in order: yt-dlp, youtube-transcript-api, YouTube Data API v3.
+    Tries methods in order: BeautifulSoup (for description), yt-dlp (description),
+    youtube-transcript-api (transcript), YouTube Data API v3 (description).
     Combines results into a markdown string.
 
     Args:
@@ -232,31 +236,63 @@ def fetch_youtube_content_with_fallbacks(url: str) -> Union[str, Dict[str, str]]
     final_description: Optional[str] = None
     final_transcript: Optional[str] = None
     errors = []  # Collect errors from each step
+    bs_error: Optional[str] = None  # Store error from BS method
 
-    # 1. Try yt-dlp (primarily for description, might give transcript URL but we ignore it now)
-    desc_dlp, _, err_dlp = _try_yt_dlp(url)
-    if desc_dlp:
-        final_description = desc_dlp
-    if err_dlp:
-        errors.append(f"yt-dlp: {err_dlp}")
-        # If yt-dlp specifically failed due to auth, maybe skip other methods? No, let others try.
+    # 0. Try BeautifulSoup scraper (for description)
+    # We prioritize this for description as requested.
+    log.info(f"Attempting YouTube description fetch via BeautifulSoup for: {url}")
+    bs_desc, bs_err = fetch_youtube_description_bs(url)
+    if bs_desc:
+        final_description = bs_desc
+        log.info(f"Successfully fetched description via BeautifulSoup for: {url}")
+    if bs_err:
+        # Don't add to main errors list yet, as it's just one method.
+        # We'll record it to decide if *all* description methods failed.
+        bs_error = f"BeautifulSoup: {bs_err}"
+        log.warning(f"BeautifulSoup method failed for {url}: {bs_err}")
+
+    # 1. Try yt-dlp (primarily for description, if BS method failed or yielded no content)
+    #    and for potentially finding transcript URLs (though youtube-transcript-api is usually better for text).
+    if not final_description:  # Only run if BS didn't get it
+        log.info(f"BeautifulSoup did not yield a description. Trying yt-dlp for: {url}")
+        desc_dlp, _, err_dlp = _try_yt_dlp(url)
+        if desc_dlp:
+            final_description = desc_dlp
+            log.info(f"yt-dlp successfully fetched description for {url}")
+        if err_dlp:
+            errors.append(f"yt-dlp: {err_dlp}")
+            log.warning(f"yt-dlp failed for {url}: {err_dlp}")
+    else:
+        log.info(
+            f"Skipping yt-dlp for description as BeautifulSoup already provided it for {url}"
+        )
 
     # 2. Try youtube-transcript-api (for transcript text)
+    # This is independent of the description fetching.
     transcript_api, err_transcript = _try_transcript_api(video_id)
     if transcript_api:
         final_transcript = transcript_api
     if err_transcript:
         errors.append(f"Transcript API: {err_transcript}")
 
-    # 3. Try YouTube Data API (if description still missing)
-    if not final_description:
-        desc_data_api, err_data_api = _try_youtube_data_api(video_id)
-        if desc_data_api:
-            final_description = desc_data_api
-        if err_data_api:
-            errors.append(f"Data API: {err_data_api}")
+    # 3. Try YouTube Data API v3 (for description, if other methods failed)
+    if (
+        not final_description and GEMINI_API_KEY
+    ):  # Only run if BS and yt-dlp didn't get it
+        log.info(
+            f"No description from BeautifulSoup or yt-dlp. Trying YouTube Data API for ID: {video_id}"
+        )
+        desc_api, err_api = _try_youtube_data_api(video_id)
+        if desc_api:
+            final_description = desc_api
+        if err_api:
+            errors.append(f"YouTube Data API: {err_api}")
 
-    # --- Combine Results ---
+    # If BeautifulSoup failed and no other description method worked, add its error.
+    if bs_error and not final_description:
+        errors.append(bs_error)
+
+    # --- Combine and Format ---
     output_parts = []
     if final_description:
         output_parts.append(
