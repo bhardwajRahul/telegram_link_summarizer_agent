@@ -2,10 +2,11 @@
 
 [Join the Telegram Channel @tech_links for curated tech news and interesting links](https://t.me/tech_links)
 
- ![GitHub Repo stars](https://img.shields.io/github/stars/kargarisaac/telegram_link_summarizer_agent)
- ![GitHub forks](https://img.shields.io/github/forks/kargarisaac/telegram_link_summarizer_agent)
- ![GitHub License](https://img.shields.io/github/license/kargarisaac/telegram_link_summarizer_agent)
+ [![GitHub Repo stars](https://img.shields.io/github/stars/kargarisaac/telegram_link_summarizer_agent)](https://github.com/kargarisaac/telegram_link_summarizer_agent)
+ [![GitHub forks](https://img.shields.io/github/forks/kargarisaac/telegram_link_summarizer_agent)](https://github.com/kargarisaac/telegram_link_summarizer_agent)
+ [![GitHub License](https://img.shields.io/github/license/kargarisaac/telegram_link_summarizer_agent)](https://github.com/kargarisaac/telegram_link_summarizer_agent)
  [![Telegram Channel](https://img.shields.io/badge/Telegram-Join%20Channel-blue?logo=telegram)](https://t.me/tech_links)
+ [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/kargarisaac/telegram_link_summarizer_agent)
 
 If you want to get the latest news and interesting links for free, feel free to join the channel. If you find this project useful, giving the repository a star would be appreciated.
 

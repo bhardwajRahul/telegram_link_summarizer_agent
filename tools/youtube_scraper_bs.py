@@ -65,9 +65,7 @@ def fetch_youtube_description_bs(url: str) -> Tuple[Optional[str], Optional[str]
 if __name__ == "__main__":
     # Test cases
     test_urls = [
-        "https://www.youtube.com/watch?v=q6pAWOG_10k",  # Your example
-        "https://www.youtube.com/watch?v=DPXG4pdPj44",  # General video
-        "https://www.youtube.com/watch?v=non_existent_video_id_xyz",  # Likely 404
+        "https://www.youtube.com/watch?v=q6pAWOG_10k",
     ]
     for test_url in test_urls:
         print(f"--- Testing URL: {test_url} ---")
