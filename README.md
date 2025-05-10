@@ -12,6 +12,9 @@ If you want to get the latest news and interesting links for free, feel free to 
 
 ![Agent Visualization](./images/image.png)
 
+![System Diagram](./images/system_arch.jpg)
+
+
 An agentic Telegram bot designed to summarize web links (articles, papers, tweets etc.) sent in a chat. It uses LangGraph to orchestrate multiple tools and language models to determine the link type, extract content, and generate concise summaries.
 
 ## ✨ Features
