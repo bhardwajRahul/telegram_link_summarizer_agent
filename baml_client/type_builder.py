@@ -15,7 +15,7 @@
 # fmt: off
 import typing
 from baml_py.baml_py import FieldType, EnumValueBuilder, EnumBuilder, ClassBuilder
-from baml_py.type_builder import TypeBuilder as _TypeBuilder, ClassPropertyBuilder
+from baml_py.type_builder import TypeBuilder as _TypeBuilder, ClassPropertyBuilder, ClassPropertyViewer, EnumValueViewer
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
 
 
@@ -28,11 +28,170 @@ class TypeBuilder(_TypeBuilder):
         ), runtime=DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
 
 
+    @property
+    def Summary(self) -> "SummaryAst":
+        return SummaryAst(self)
 
 
 
 
 
+class SummaryAst:
+    def __init__(self, tb: _TypeBuilder):
+        _tb = tb._tb # type: ignore (we know how to use this private attribute)
+        self._bldr = _tb.class_("Summary")
+        self._properties: typing.Set[str] = set([ "title",  "key_points",  "concise_summary", ])
+        self._props = SummaryProperties(self._bldr, self._properties)
+
+    def type(self) -> FieldType:
+        return self._bldr.field()
+
+    @property
+    def props(self) -> "SummaryProperties":
+        return self._props
+
+
+class SummaryViewer(SummaryAst):
+    def __init__(self, tb: _TypeBuilder):
+        super().__init__(tb)
+
+    
+    def list_properties(self) -> typing.List[typing.Tuple[str, ClassPropertyViewer]]:
+        return [(name, ClassPropertyViewer(self._bldr.property(name))) for name in self._properties]
+
+
+
+class SummaryProperties:
+    def __init__(self, bldr: ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = bldr
+        self.__properties = properties
+
+    
+
+    @property
+    def title(self) -> ClassPropertyViewer:
+        return ClassPropertyViewer(self.__bldr.property("title"))
+
+    @property
+    def key_points(self) -> ClassPropertyViewer:
+        return ClassPropertyViewer(self.__bldr.property("key_points"))
+
+    @property
+    def concise_summary(self) -> ClassPropertyViewer:
+        return ClassPropertyViewer(self.__bldr.property("concise_summary"))
+
+    
+
+
+
+class ContentTypeAst:
+    def __init__(self, tb: _TypeBuilder):
+        _tb = tb._tb # type: ignore (we know how to use this private attribute)
+        self._bldr = _tb.enum("ContentType")
+        self._values: typing.Set[str] = set([ "Webpage",  "PDF",  "GenericText", ])
+        self._vals = ContentTypeValues(self._bldr, self._values)
+
+    def type(self) -> FieldType:
+        return self._bldr.field()
+
+    @property
+    def values(self) -> "ContentTypeValues":
+        return self._vals
+
+
+class ContentTypeViewer(ContentTypeAst):
+    def __init__(self, tb: _TypeBuilder):
+        super().__init__(tb)
+
+    def list_values(self) -> typing.List[typing.Tuple[str, EnumValueViewer]]:
+        return [(name, EnumValueViewer(self._bldr.value(name))) for name in self._values]
+
+
+class ContentTypeValues:
+    def __init__(self, enum_bldr: EnumBuilder, values: typing.Set[str]):
+        self.__bldr = enum_bldr
+        self.__values = values
+
+    
+
+    @property
+    def Webpage(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("Webpage"))
+    
+
+    @property
+    def PDF(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("PDF"))
+    
+
+    @property
+    def GenericText(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("GenericText"))
+    
+
+    
+
+class ExtractorToolAst:
+    def __init__(self, tb: _TypeBuilder):
+        _tb = tb._tb # type: ignore (we know how to use this private attribute)
+        self._bldr = _tb.enum("ExtractorTool")
+        self._values: typing.Set[str] = set([ "WebpageExtractor",  "PDFExtractor",  "TwitterExtractor",  "LinkedInExtractor",  "Unsupported",  "YoutubeExtractor", ])
+        self._vals = ExtractorToolValues(self._bldr, self._values)
+
+    def type(self) -> FieldType:
+        return self._bldr.field()
+
+    @property
+    def values(self) -> "ExtractorToolValues":
+        return self._vals
+
+
+class ExtractorToolViewer(ExtractorToolAst):
+    def __init__(self, tb: _TypeBuilder):
+        super().__init__(tb)
+
+    def list_values(self) -> typing.List[typing.Tuple[str, EnumValueViewer]]:
+        return [(name, EnumValueViewer(self._bldr.value(name))) for name in self._values]
+
+
+class ExtractorToolValues:
+    def __init__(self, enum_bldr: EnumBuilder, values: typing.Set[str]):
+        self.__bldr = enum_bldr
+        self.__values = values
+
+    
+
+    @property
+    def WebpageExtractor(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("WebpageExtractor"))
+    
+
+    @property
+    def PDFExtractor(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("PDFExtractor"))
+    
+
+    @property
+    def TwitterExtractor(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("TwitterExtractor"))
+    
+
+    @property
+    def LinkedInExtractor(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("LinkedInExtractor"))
+    
+
+    @property
+    def Unsupported(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("Unsupported"))
+    
+
+    @property
+    def YoutubeExtractor(self) -> EnumValueViewer:
+        return EnumValueViewer(self.__bldr.value("YoutubeExtractor"))
+    
+
+    
 
 
 __all__ = ["TypeBuilder"]
