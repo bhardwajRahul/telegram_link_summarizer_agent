@@ -15,7 +15,7 @@ from youtube_transcript_api import (
 from yt_dlp import YoutubeDL
 
 # Import the new BeautifulSoup scraper
-from tools.youtube_scraper_bs import fetch_youtube_description_bs
+from tools.youtube_scraper_bs import fetch_youtube_details_bs
 
 # Load environment variables
 load_dotenv()
@@ -215,9 +215,9 @@ def _try_youtube_data_api(video_id: str) -> Tuple[Optional[str], Optional[str]]:
 
 def fetch_youtube_content_with_fallbacks(url: str) -> Union[str, Dict[str, str]]:
     """
-    Fetches YouTube video description and transcript using multiple methods with fallbacks.
+    Fetches YouTube video title, description and transcript using multiple methods with fallbacks.
 
-    Tries methods in order: BeautifulSoup (for description), yt-dlp (description),
+    Tries methods in order: BeautifulSoup (for title and description), yt-dlp (description),
     youtube-transcript-api (transcript), YouTube Data API v3 (description).
     Combines results into a markdown string.
 
@@ -225,7 +225,7 @@ def fetch_youtube_content_with_fallbacks(url: str) -> Union[str, Dict[str, str]]
         url: The YouTube video URL.
 
     Returns:
-        - A string containing the formatted content (description and/or transcript).
+        - A string containing the formatted content (title, description and/or transcript).
         - An error dictionary {"error": "message"} if all methods fail or a critical error occurs early.
     """
     log.info(f"Fetching YouTube content for URL: {url}")
@@ -233,87 +233,127 @@ def fetch_youtube_content_with_fallbacks(url: str) -> Union[str, Dict[str, str]]
     if not video_id:
         return {"error": f"Could not extract YouTube video ID from URL: {url}"}
 
+    final_title: Optional[str] = None
     final_description: Optional[str] = None
     final_transcript: Optional[str] = None
     errors = []  # Collect errors from each step
-    bs_error: Optional[str] = None  # Store error from BS method
 
-    # 0. Try BeautifulSoup scraper (for description)
-    # We prioritize this for description as requested.
-    log.info(f"Attempting YouTube description fetch via BeautifulSoup for: {url}")
-    bs_desc, bs_err = fetch_youtube_description_bs(url)
-    if bs_desc:
-        final_description = bs_desc
-        log.info(f"Successfully fetched description via BeautifulSoup for: {url}")
-    if bs_err:
-        # Don't add to main errors list yet, as it's just one method.
-        # We'll record it to decide if *all* description methods failed.
-        bs_error = f"BeautifulSoup: {bs_err}"
-        log.warning(f"BeautifulSoup method failed for {url}: {bs_err}")
+    potential_descriptions: Dict[str, str] = {}
+    bs_title_error: Optional[str] = None  # Specific error for BS title fetching
+    bs_desc_error: Optional[str] = None  # Specific error for BS desc fetching
 
-    # 1. Try yt-dlp (primarily for description, if BS method failed or yielded no content)
-    #    and for potentially finding transcript URLs (though youtube-transcript-api is usually better for text).
-    if not final_description:  # Only run if BS didn't get it
-        log.info(f"BeautifulSoup did not yield a description. Trying yt-dlp for: {url}")
-        desc_dlp, _, err_dlp = _try_yt_dlp(url)
-        if desc_dlp:
-            final_description = desc_dlp
-            log.info(f"yt-dlp successfully fetched description for {url}")
-        if err_dlp:
-            errors.append(f"yt-dlp: {err_dlp}")
-            log.warning(f"yt-dlp failed for {url}: {err_dlp}")
-    else:
+    # 0. Try BeautifulSoup scraper (for title and potentially a description)
+    log.info(
+        f"Attempting YouTube title and description fetch via BeautifulSoup for: {url}"
+    )
+    bs_title_val, bs_desc_val, bs_title_err_str, bs_desc_err_str = (
+        fetch_youtube_details_bs(url)
+    )
+
+    if bs_title_val:
+        final_title = bs_title_val  # Usually, title from BS is good enough if found
+        log.info(f"Successfully fetched title via BeautifulSoup for: {url}")
+    if bs_title_err_str:
+        bs_title_error = f"BeautifulSoup (Title): {bs_title_err_str}"
+        # Don't add to main errors yet, allow other methods to try for title if we were to add title fallbacks
+
+    if bs_desc_val:
+        potential_descriptions["bs"] = bs_desc_val
         log.info(
-            f"Skipping yt-dlp for description as BeautifulSoup already provided it for {url}"
+            f"BeautifulSoup provided a description candidate (length: {len(bs_desc_val)}) for: {url}"
         )
+    if bs_desc_err_str:
+        bs_desc_error = f"BeautifulSoup (Description): {bs_desc_err_str}"
+        # Don't add to main errors yet, other methods will try for description
 
-    # 2. Try youtube-transcript-api (for transcript text)
-    # This is independent of the description fetching.
+    # 1. Try yt-dlp (for description)
+    log.info(f"Attempting description fetch via yt-dlp for: {url}")
+    desc_dlp, _, err_dlp = _try_yt_dlp(url)
+    if desc_dlp:
+        potential_descriptions["dlp"] = desc_dlp
+        log.info(
+            f"yt-dlp provided a description candidate (length: {len(desc_dlp)}) for: {url}"
+        )
+    if err_dlp:
+        errors.append(f"yt-dlp (Description): {err_dlp}")
+        log.warning(f"yt-dlp failed for description for {url}: {err_dlp}")
+
+    # 2. Try youtube-transcript-api (for transcript text - independent of description)
     transcript_api, err_transcript = _try_transcript_api(video_id)
     if transcript_api:
         final_transcript = transcript_api
     if err_transcript:
         errors.append(f"Transcript API: {err_transcript}")
 
-    # 3. Try YouTube Data API v3 (for description, if other methods failed)
-    if (
-        not final_description and GEMINI_API_KEY
-    ):  # Only run if BS and yt-dlp didn't get it
+    # 3. Try YouTube Data API v3 (for description - and potentially title if we extend _try_youtube_data_api)
+    if GEMINI_API_KEY:  # Only try if API key is available
         log.info(
-            f"No description from BeautifulSoup or yt-dlp. Trying YouTube Data API for ID: {video_id}"
+            f"Attempting description fetch via YouTube Data API for ID: {video_id}"
         )
+        # Assuming _try_youtube_data_api primarily returns description for now.
+        # If it were extended to return title: title_api, desc_api, err_api = _try_youtube_data_api(video_id)
         desc_api, err_api = _try_youtube_data_api(video_id)
         if desc_api:
-            final_description = desc_api
+            potential_descriptions["api"] = desc_api
+            log.info(
+                f"YouTube Data API provided a description candidate (length: {len(desc_api)}) for ID: {video_id}"
+            )
         if err_api:
-            errors.append(f"YouTube Data API: {err_api}")
+            errors.append(f"YouTube Data API (Description): {err_api}")
+            log.warning(
+                f"YouTube Data API failed for description for {video_id}: {err_api}"
+            )
 
-    # If BeautifulSoup failed and no other description method worked, add its error.
-    if bs_error and not final_description:
-        errors.append(bs_error)
+        # Fallback for title if BS didn't get it and API could provide it
+        # if not final_title and title_api: # Example if _try_youtube_data_api returned title
+        #     final_title = title_api
+        #     log.info(f"YouTube Data API provided title for ID: {video_id}")
+
+    # Determine the best description from collected candidates
+    if potential_descriptions:
+        # Find the key of the longest description string in the dictionary
+        best_source_key = max(
+            potential_descriptions, key=lambda k: len(potential_descriptions[k])
+        )
+        final_description = potential_descriptions[best_source_key]
+        log.info(
+            f"Selected description from source '{best_source_key}' (length: {len(final_description)}) for {url}. Available sources: {list(potential_descriptions.keys())}"
+        )
+    else:
+        log.info(f"No description candidates found from any source for {url}")
+        # If BS description specifically had an error and nothing else was found
+        if bs_desc_error:
+            errors.append(bs_desc_error)
+
+    # If title is still missing and BS had a specific error for title
+    if not final_title and bs_title_error:
+        errors.append(bs_title_error)
 
     # --- Combine and Format ---
     output_parts = []
+    if final_title:
+        output_parts.append(f"**Video Title:**\n{final_title.strip()}")
+
     if final_description:
         output_parts.append(
-            f"**Video Description:**\\n```\\n{final_description.strip()}\\n```"
+            f"**Video Description:**\n```\n{final_description.strip()}\n```"
         )
 
     if final_transcript:
         output_parts.append(
-            f"**Video Transcript:**\\n```\\n{final_transcript.strip()}\\n```"
+            f"**Video Transcript:**\n```\n{final_transcript.strip()}\n```"
         )
 
     if output_parts:
         log.info(
-            f"Successfully gathered content for {video_id}. Description: {final_description is not None}, Transcript: {final_transcript is not None}"
+            f"Successfully gathered content for {video_id}. Title: {final_title is not None}, Description: {final_description is not None}, Transcript: {final_transcript is not None}"
         )
         # Log collected errors if any content was successfully gathered
         if errors:
             log.warning(
                 f"Partial success for {video_id}. Errors encountered: {'; '.join(errors)}"
             )
-        return "\\n\\n".join(output_parts)
+        return "\n\n".join(output_parts)
     else:
         # All methods failed to get *any* content
         error_summary = (
@@ -332,7 +372,9 @@ def fetch_youtube_content_with_fallbacks(url: str) -> Union[str, Dict[str, str]]
 if __name__ == "__main__":
     # Test cases
     # url_rick = "https://www.youtube.com/watch?v=dQw4w9WgXcQ" # Often triggers bot detection
-    url_regular = "https://www.youtube.com/watch?v=DPXG4pdPj44"  # Should have subs
+    url_regular = (
+        "https://www.youtube.com/watch?v=q6pAWOG_10k&t=1213s"  # Should have subs
+    )
     url_no_subs = (
         "https://www.youtube.com/watch?v=xxxxxxxxxxx"  # Non-existent video ID example
     )
@@ -345,7 +387,7 @@ if __name__ == "__main__":
     }
 
     for name, test_url in test_urls.items():
-        print(f"\\n--- Testing: {name} ({test_url}) ---")
+        print(f"\n--- Testing: {name} ({test_url}) ---")
         result = fetch_youtube_content_with_fallbacks(test_url)
         if isinstance(result, dict) and "error" in result:
             print(f"Error: {result['error']}")

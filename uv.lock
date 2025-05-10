@@ -160,16 +160,29 @@ wheels = [
 
 [[package]]
 name = "baml-py"
-version = "0.86.1"
+version = "0.87.2"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/92/ee/b59d25d1479bb9ad2f4b3ca428b93790c4668b4d15d0e411545d974e6851/baml_py-0.86.1-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:48de0882d28cd94552ab5f048439b4aa59e0d44a0c72801474f3f7b0f62118ba", size = 15860514, upload_time = "2025-04-30T22:32:01.451Z" },
-    { url = "https://files.pythonhosted.org/packages/2d/a7/4ae7b1ab8023307da44f776d4aa099266a19387a40297f2a108670acea0e/baml_py-0.86.1-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:de66ee9799a7b00d1b7e199393db9c596941664e03e4c41c47286ad893b92bc8", size = 14773422, upload_time = "2025-04-30T22:32:05.063Z" },
-    { url = "https://files.pythonhosted.org/packages/75/7d/f4f587b468307bce5d4cc91e95f3a13cd75828bf11f080a58d951fb76b92/baml_py-0.86.1-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9f17f406986349736812837866a2c6bc023897da0d2aa978f4c845aff353304c", size = 18234779, upload_time = "2025-04-30T22:32:09.373Z" },
-    { url = "https://files.pythonhosted.org/packages/6a/e0/766c92a8901fdf2ea5abbb5e74ed39f85d31a858372bf256c86b61653274/baml_py-0.86.1-cp38-abi3-manylinux_2_24_aarch64.whl", hash = "sha256:fcb1317a34a3423e076e895af7a24d74a15116be9dc5b62e644d7b9cb7a75b83", size = 17577944, upload_time = "2025-04-30T22:32:12.274Z" },
-    { url = "https://files.pythonhosted.org/packages/06/ce/23b1e11171743692f9a3cad16a09aee573d5ed21008ac5bae06ba1826469/baml_py-0.86.1-cp38-abi3-musllinux_1_1_aarch64.whl", hash = "sha256:81baa2d3909192078638a111af53f219d6e06416227fb254b0d001ecfc52fbd6", size = 17785832, upload_time = "2025-04-30T22:32:15.753Z" },
-    { url = "https://files.pythonhosted.org/packages/a9/d9/52d59cd5f325b267425c1d13e7affc4cb6ca83147065cebf9baaad57d6ae/baml_py-0.86.1-cp38-abi3-musllinux_1_1_x86_64.whl", hash = "sha256:9ead43a3354b54de21122887a096836eadf5be5c17c7b266ac47751481580fb0", size = 18411101, upload_time = "2025-04-30T22:32:18.688Z" },
-    { url = "https://files.pythonhosted.org/packages/5b/f7/9e6009c4d5a8fe680e770228ce9f314bab70e6379643bccc3b07a4ce50d6/baml_py-0.86.1-cp38-abi3-win_amd64.whl", hash = "sha256:1ec46479c45ce42eb364670816f52eca4355b99280ca85786f12f01f906085db", size = 15895813, upload_time = "2025-04-30T22:32:21.805Z" },
+    { url = "https://files.pythonhosted.org/packages/24/ec/8257f6da995976523fee242117ff4d5347f5b32ab3c6caea091d81c9f6d0/baml_py-0.87.2-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:8e0bff1c621367fe4c254b42acadc1d56d6510d362a68918ac67a5344c2f5b07", size = 15867628, upload_time = "2025-05-08T20:57:09.693Z" },
+    { url = "https://files.pythonhosted.org/packages/87/a6/294849044d80e032f520daf3bd65a45d6dd965f6fa2c73649f0379310512/baml_py-0.87.2-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:75034631aff418bf27a3df479aee2ca3f42603268b93952fc471d0cd2ba70feb", size = 14753160, upload_time = "2025-05-08T20:57:12.509Z" },
+    { url = "https://files.pythonhosted.org/packages/68/42/217e375f7004d8fc68406967193d8917d649b92b236710a39ee0e87386f9/baml_py-0.87.2-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:06899c0c6be1508060e289e146836a68b1a1009d582826fbc01b88adad1faa3e", size = 18254919, upload_time = "2025-05-08T20:57:15.121Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/0a/ebf2d13ae2b8218592707e1fa6d4260810a05f4ab763fc436a341a3d3e69/baml_py-0.87.2-cp38-abi3-manylinux_2_24_aarch64.whl", hash = "sha256:d05fd5506cebd9ba7e6a63d77ac3c94aa3cfe5095a7ecdc9e7d420a8382a7db7", size = 17592374, upload_time = "2025-05-08T20:57:18.308Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/5c/f90f99e88bd3ab3e591f464dbf924b37090b6a61df44e83134420b92fd9c/baml_py-0.87.2-cp38-abi3-musllinux_1_1_aarch64.whl", hash = "sha256:31450790a1cae7eb2744a8c51b23f8336480b94d753643de556abcda6be487e7", size = 17839716, upload_time = "2025-05-08T20:57:20.421Z" },
+    { url = "https://files.pythonhosted.org/packages/af/91/a0a960a9d7b90d35af4809347ef504e0ae98dc2c9b1fbdf27589f6a66fbd/baml_py-0.87.2-cp38-abi3-musllinux_1_1_x86_64.whl", hash = "sha256:27059d0252bdd77e872213c93c95d5df2c4ea31f7f0a83f2ea29409f3f49911a", size = 18403666, upload_time = "2025-05-08T20:57:27.401Z" },
+    { url = "https://files.pythonhosted.org/packages/25/05/f4a4393eb9c22a09de28a25794a28b0dc6fb8adf1aa97c09f062b64bbe8a/baml_py-0.87.2-cp38-abi3-win_amd64.whl", hash = "sha256:dc0c1b087b810d386dac5cc131c9fef5bacd1716c2da0f98602f2032a0c70765", size = 15942413, upload_time = "2025-05-08T20:57:29.625Z" },
+]
+
+[[package]]
+name = "beautifulsoup4"
+version = "4.13.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "soupsieve" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d8/e4/0c4c39e18fd76d6a628d4dd8da40543d136ce2d1752bd6eeeab0791f4d6b/beautifulsoup4-4.13.4.tar.gz", hash = "sha256:dbb3c4e1ceae6aefebdaf2423247260cd062430a410e38c66f2baa50a8437195", size = 621067, upload_time = "2025-04-15T17:05:13.836Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/cd/30110dc0ffcf3b131156077b90e9f60ed75711223f306da4db08eff8403b/beautifulsoup4-4.13.4-py3-none-any.whl", hash = "sha256:9bbbb14bfde9d79f38b8cd5f8c7c85f4b8f2523190ebed90e950a8dea4cb1c4b", size = 187285, upload_time = "2025-04-15T17:05:12.221Z" },
 ]
 
 [[package]]
@@ -182,6 +195,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/35/c8/1e456a043179f2aef10bcaafea79f6d06c0ac45cc994767a54f680509f3b/blockbuster-1.5.24.tar.gz", hash = "sha256:97645775761a5d425666ec0bc99629b65c7eccdc2f770d2439850682567af4ec", size = 51245, upload_time = "2025-03-18T10:12:06.398Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/c8/57a4c80e5abec29fa9406307a5277527f21210bfc6c2c61c3d8ded36c09b/blockbuster-1.5.24-py3-none-any.whl", hash = "sha256:e703497b55bc72af09d60d1cd746c2f3ba7ce0c446fa256be6ccda5e7d403520", size = 13214, upload_time = "2025-03-18T10:12:04.802Z" },
+]
+
+[[package]]
+name = "bs4"
+version = "0.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautifulsoup4" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c9/aa/4acaf814ff901145da37332e05bb510452ebed97bc9602695059dd46ef39/bs4-0.0.2.tar.gz", hash = "sha256:a48685c58f50fe127722417bae83fe6badf500d54b55f7e39ffe43b798653925", size = 698, upload_time = "2024-01-17T18:15:47.371Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/bb/bf7aab772a159614954d84aa832c129624ba6c32faa559dfb200a534e50b/bs4-0.0.2-py2.py3-none-any.whl", hash = "sha256:abf8742c0805ef7f662dce4b51cca104cffe52b835238afc169142ab9b3fbccc", size = 1189, upload_time = "2024-01-17T18:15:48.613Z" },
 ]
 
 [[package]]
@@ -2026,6 +2051,15 @@ wheels = [
 ]
 
 [[package]]
+name = "soupsieve"
+version = "2.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/f4/4a80cd6ef364b2e8b65b15816a843c0980f7a5a2b4dc701fc574952aa19f/soupsieve-2.7.tar.gz", hash = "sha256:ad282f9b6926286d2ead4750552c8a6142bc4c783fd66b0293547c8fe6ae126a", size = 103418, upload_time = "2025-04-20T18:50:08.518Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/9c/0e6afc12c269578be5c0c1c9f4b49a8d32770a080260c333ac04cc1c832d/soupsieve-2.7-py3-none-any.whl", hash = "sha256:6e60cc5c1ffaf1cebcc12e8188320b72071e922c2e897f737cadce79ad5d30c4", size = 36677, upload_time = "2025-04-20T18:50:07.196Z" },
+]
+
+[[package]]
 name = "sqlalchemy"
 version = "2.0.40"
 source = { registry = "https://pypi.org/simple" }
@@ -2119,6 +2153,7 @@ dependencies = [
     { name = "annotated-types" },
     { name = "anyio" },
     { name = "baml-py" },
+    { name = "bs4" },
     { name = "click" },
     { name = "fastapi" },
     { name = "google-api-python-client" },
@@ -2154,7 +2189,8 @@ dependencies = [
 requires-dist = [
     { name = "annotated-types", specifier = ">=0.7.0" },
     { name = "anyio", specifier = ">=4.9.0" },
-    { name = "baml-py", specifier = ">=0.86.1" },
+    { name = "baml-py", specifier = ">=0.87.2" },
+    { name = "bs4", specifier = ">=0.0.2" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "google-api-python-client", specifier = ">=2.169.0" },

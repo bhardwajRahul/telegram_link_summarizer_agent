@@ -5,7 +5,7 @@ description = "An agentic Telegram bot to summarize links and papers."
 readme = "README.md"
 requires-python = ">=3.11" # Adjusted to match Docker image
 dependencies = [
-    "baml-py>=0.86.1",
+    "baml-py>=0.87.2",
     "langgraph>=0.0.57",
     "langchain>=0.2.0",
     "langchain-openai>=0.1.7", # Assuming OpenAI, change if needed
@@ -38,6 +38,7 @@ dependencies = [
     "youtube-transcript-api>=1.0.3",
     "google-api-python-client>=2.169.0",
     "google-cloud-secret-manager>=2.20.0", # Added for GCP Secret Manager access
+    "bs4>=0.0.2",
 ]
 
 [tool.setuptools]
