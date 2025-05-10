@@ -18,10 +18,11 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 
 *   **Link Summarization:** Extracts content from URLs (webpages, PDFs, Twitter/X, LinkedIn posts) and provides summaries.
 *   **Robust YouTube Support:** Handles YouTube links using a fallback strategy:
-    1.  Attempts extraction using `yt-dlp`.
-    2.  If needed, fetches transcript via `youtube-transcript-api`.
-    3.  If needed, fetches description via YouTube Data API v3.
-    4.  If all YouTube methods fail, falls back to generic web extraction (Tavily).
+    1.  Attempts extraction of video description using a `requests` and `BeautifulSoup` based scraper (primary).
+    2.  If needed, falls back to `yt-dlp` for description.
+    3.  Fetches transcript via `youtube-transcript-api`.
+    4.  If description is still missing, fetches description via YouTube Data API v3.
+    5.  If all YouTube-specific methods fail to get content, falls back to generic web extraction (Tavily) for the page.
 *   **LLM Routing:** Uses a BAML LLM function (`RouteRequest`) to determine the type of link (Webpage, PDF, Twitter, LinkedIn, Unsupported).
 *   **Web Search/Extraction:** Uses Tavily for standard webpage content extraction.
 *   **PDF Support:** Can process and summarize PDF documents found at URLs.
@@ -35,7 +36,7 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 
 *   **Routing/Summarization:** BAML (Boundary) + LLM (e.g., Gemini, Deepseek)
 *   **Orchestration:** LangGraph
-*   **YouTube Extraction:** `yt-dlp`, `youtube-transcript-api`, `google-api-python-client` (YouTube Data API v3 is required to be enabled on GCP console)
+*   **YouTube Extraction:** `requests`, `beautifulsoup4` (for primary description scraping), `yt-dlp`, `youtube-transcript-api`, `google-api-python-client` (YouTube Data API v3 is required to be enabled on GCP console)
 *   **Twitter/X API:** `twitterapi.io` via `requests`
 *   **Web Extraction:** Tavily Search SDK
 *   **LinkedIn Extraction:** Tavily Search SDK (via `linkedin_scraper_tool.py`)
