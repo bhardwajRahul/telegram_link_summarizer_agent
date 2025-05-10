@@ -830,7 +830,7 @@ if __name__ == "__main__":
     # Unsupported URL Type (Router should pick Unsupported)
     test_url_msg_unsupported = "Check this out: ftp://files.example.com/data.zip"
     # YouTube URL (Router should pick Youtube)
-    test_url_msg_youtube = "Summarize this video: https://www.youtube.com/watch?v=DPXG4pdPj44"  # URL from youtube_scraper test
+    test_url_msg_youtube = "Summarize this video: https://www.youtube.com/watch?v=n5oBmmBkW6A"  # URL from youtube_scraper test
     # YouTube URL that requires login (Should fallback to Tavily)
     test_url_msg_youtube_login = (
         "Summarize: https://www.youtube.com/watch?v=hhMXE9-JUAc"  # Test fallback
@@ -846,7 +846,7 @@ if __name__ == "__main__":
             # "No URL": test_url_msg_nourl,
             # "Unsupported FTP": test_url_msg_unsupported,
             "YouTube": test_url_msg_youtube,
-            "YouTube Needs Login": test_url_msg_youtube_login,  # Test fallback
+            # "YouTube Needs Login": test_url_msg_youtube_login,  # Test fallback
         }
 
         for name, msg in test_cases.items():
