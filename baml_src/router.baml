@@ -13,7 +13,7 @@ enum ExtractorTool {
 function RouteRequest(original_message: string) -> ExtractorTool {
   // Use a capable but fast client for routing
 //   client Gemini2_5_flash
-  client DeepSeekV3
+  client LLMFallback
 
   prompt #"
     Analyze the following user message and determine the best tool to use for extracting content from any URL present.

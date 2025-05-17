@@ -12,8 +12,10 @@ from rich.console import Console
 from tools.search import run_tavily_tool
 from tools.pdf_handler import get_pdf_text
 from tools.twitter_api_tool import fetch_tweet_thread
-from tools.linkedin_scraper_tool import scrape_linkedin_post
-from tools.youtube_scraper import fetch_youtube_content_with_fallbacks
+from tools.linkedin_agentql_scraper import (
+    scrape_linkedin_post as scrape_linkedin_post_agentql,
+)
+from tools.youtube_agentql_scraper import scrape_youtube as scrape_youtube_agentql
 
 load_dotenv()
 
@@ -257,30 +259,31 @@ def get_linkedin_content(state: AgentState) -> Dict[str, Any]:
 
     try:
         console.print(f"Fetching LinkedIn post content for URL: {url}", style="cyan")
-        # Use the LinkedIn tool
-        result = scrape_linkedin_post(url)
+        # Use the LinkedIn tool (AgentQL version)
+        result = scrape_linkedin_post_agentql(
+            url, headless=True
+        )  # Call with headless=True
 
-        # Check if the tool returned an error message (string)
-        if isinstance(result, str) and result.startswith("Error:"):
-            error_message = result
-            console.print(error_message, style="red bold")
-            content_result = ""  # Ensure content is empty if tool errored
-        # Check if the tool returned content (dict)
-        elif isinstance(result, dict) and result.get("content"):
+        # AgentQL scraper returns a dict: {"author": "...", "content": "..."}
+        if isinstance(result, dict) and result.get("content"):
             content_result = result["content"]
-            source_url = result.get(
-                "source_url"
-            )  # Optional: store source if needed later
+            # author = result.get("author") # Author is available if needed later
             console.print(
-                f"Successfully fetched LinkedIn content (Source: {source_url}) for: {url}",
+                f"Successfully fetched LinkedIn content (AgentQL) for: {url}",
                 style="green",
             )
-            # Ensure content_result is a string
             if not isinstance(content_result, str):
                 content_result = str(content_result)
-        # Handle unexpected return types or empty success case
+        elif (
+            isinstance(result, dict) and "error" in result
+        ):  # Check for an error key if scraper returns errors that way
+            error_message = (
+                f"LinkedIn AgentQL scraper returned an error: {result['error']}"
+            )
+            console.print(error_message, style="red bold")
+            content_result = ""
         else:
-            error_message = f"LinkedIn tool returned unexpected result or no content: {type(result)}"
+            error_message = f"LinkedIn AgentQL scraper returned unexpected result or no content: {result}"
             console.print(error_message, style="yellow")
             content_result = ""
 
@@ -288,7 +291,6 @@ def get_linkedin_content(state: AgentState) -> Dict[str, Any]:
         console.print(
             f"Unexpected error calling scrape_linkedin_post for {url}: {e}",
             style="red bold",
-            exc_info=True,  # Include traceback for unexpected errors
         )
         error_message = (
             f"Error: An unexpected error occurred while calling the LinkedIn tool. {e}"
@@ -312,73 +314,60 @@ def get_youtube_content(state: AgentState) -> Dict[str, Any]:
     url = state["url"]
     error_message = None
     content_result = ""
-    needs_fallback = False
     # For YouTube, let's treat the content type as Webpage for the summarizer initially
     content_type = ContentType.Webpage
 
     # Reset error and fallback flag from previous steps if any
     state["error"] = None
-    state["needs_web_fallback"] = False
+    # No longer using needs_web_fallback with AgentQL direct approach
+    # state["needs_web_fallback"] = False
 
     try:
-        console.print(f"Fetching YouTube info for URL: {url}", style="cyan")
-        # Use the new YouTube tool with fallbacks
-        result = fetch_youtube_content_with_fallbacks(url)
+        console.print(f"Fetching YouTube info for URL (AgentQL): {url}", style="cyan")
+        # Use the YouTube AgentQL tool
+        result = scrape_youtube_agentql(url, headless=True)  # Call with headless=True
 
-        # Check if the tool returned the specific fallback error
-        if (
-            isinstance(result, dict)
-            and result.get("error") == "youtube_fallback_failed"
+        # AgentQL scraper returns: {"title": "...", "description": "..."}
+        if isinstance(result, dict) and (
+            result.get("title") or result.get("description")
         ):
-            error_message = f"YouTube scraping failed after trying all methods. Details: {result.get('details', 'N/A')}"
+            title = result.get("title", "")
+            description = result.get("description", "")
+            content_result = f"Title: {title}\n\nDescription:\n{description}".strip()
             console.print(
-                f"YouTube fetch failed: {error_message}. Triggering web fallback.",
-                style="yellow",
-            )
-            content_result = ""  # Ensure content is empty
-            needs_fallback = True
-            # Clear the error message for the state, as we are handling it via fallback
-            error_message = None
-        # Check if the tool returned a different error dictionary
-        elif isinstance(result, dict) and "error" in result:
-            error_message = f"YouTube tool encountered an error: {result['error']}"
-            console.print(error_message, style="red bold")
-            content_result = ""
-            needs_fallback = False  # Don't fallback on general errors
-        # Check if the tool returned content successfully (string)
-        elif isinstance(result, str):
-            content_result = result
-            console.print(
-                f"Successfully fetched YouTube content (description/transcript) for: {url}",
+                f"Successfully fetched YouTube content (AgentQL) for: {url}",
                 style="green",
             )
-            needs_fallback = False
-            error_message = None  # Clear any previous transient errors
-        # Handle unexpected return types
-        else:
+            error_message = None
+        elif (
+            isinstance(result, dict) and "error" in result
+        ):  # If scraper returns dict with error
             error_message = (
-                f"YouTube tool returned unexpected result type: {type(result)}"
+                f"YouTube AgentQL scraper returned an error: {result['error']}"
             )
+            console.print(error_message, style="red bold")
+            content_result = ""
+        else:
+            error_message = f"YouTube AgentQL scraper returned unexpected result or no content: {result}"
             console.print(error_message, style="yellow")
             content_result = ""
-            needs_fallback = False
 
     except Exception as e:
         console.print(
-            f"Unexpected error calling fetch_youtube_content_with_fallbacks for {url}: {e}",
+            f"Unexpected error calling scrape_youtube_agentql for {url}: {e}",
             style="red bold",
-            exc_info=True,  # Include traceback for unexpected errors
+            exc_info=True,
         )
-        error_message = f"Error: An unexpected error occurred while calling the YouTube tool function. {e}"
+        error_message = f"Error: An unexpected error occurred while calling the YouTube AgentQL tool. {e}"
         content_result = ""
-        needs_fallback = False
+        # needs_fallback = False # Not used anymore
 
     return {
         # **state,
         "content_type": content_type,
         "content": content_result.strip(),
-        "error": error_message,  # Will be None if falling back
-        "needs_web_fallback": needs_fallback,
+        "error": error_message,  # Will be None if successful
+        "needs_web_fallback": False,  # Explicitly set to false, not used for fallback anymore
     }
 
 
@@ -567,21 +556,15 @@ def should_summarize(state: AgentState) -> str:
     content = state.get("content")
     error = state.get("error")  # Check error from the *extractor* node
     has_content = content and isinstance(content, str) and content.strip() != ""
-    needs_fallback = state.get("needs_web_fallback", False)
+    # needs_fallback is no longer used for YouTube -> Webpage fallback
+    # if needs_fallback:
+    #     console.print(
+    #         "Routing after Extraction: YouTube fallback failed, routing to Web Extractor.",
+    #         style="yellow",
+    #     )
+    #     return "web_extractor"  # Route to web extractor as the last resort
 
-    # Decision Priority:
-    # 1. Fallback needed?
-    # 2. Error occurred?
-    # 3. Content available?
-    # 4. No content, no error?
-
-    if needs_fallback:
-        console.print(
-            "Routing after Extraction: YouTube fallback failed, routing to Web Extractor.",
-            style="yellow",
-        )
-        return "web_extractor"  # Route to web extractor as the last resort
-    elif error:
+    if error:
         console.print(
             f"Routing after Extraction: Error occurred ('{error}'), routing to END.",
             style="red",
@@ -689,7 +672,6 @@ def build_graph():
         should_summarize,  # Use the same logic function, now enhanced
         {
             "summarize_content": "summarize_content",
-            "web_extractor": "web_extractor",  # Add the fallback path
             END: END,
         },
     )
@@ -846,7 +828,7 @@ if __name__ == "__main__":
             # "No URL": test_url_msg_nourl,
             # "Unsupported FTP": test_url_msg_unsupported,
             "YouTube": test_url_msg_youtube,
-            # "YouTube Needs Login": test_url_msg_youtube_login,  # Test fallback
+            # "YouTube Needs Login": test_url_msg_youtube_login,  # Test fallback (AgentQL should handle public ones)
         }
 
         for name, msg in test_cases.items():

@@ -20,17 +20,12 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 ## ✨ Features
 
 *   **Link Summarization:** Extracts content from URLs (webpages, PDFs, Twitter/X, LinkedIn posts) and provides summaries.
-*   **Robust YouTube Support:** Handles YouTube links using a fallback strategy:
-    1.  Attempts extraction of video description using a `requests` and `BeautifulSoup` based scraper (primary).
-    2.  If needed, falls back to `yt-dlp` for description.
-    3.  Fetches transcript via `youtube-transcript-api`.
-    4.  If description is still missing, fetches description via YouTube Data API v3.
-    5.  If all YouTube-specific methods fail to get content, falls back to generic web extraction (Tavily) for the page.
+*   **Robust YouTube Support:** Handles YouTube links using Playwright and AgentQL to extract video title and description.
 *   **LLM Routing:** Uses a BAML LLM function (`RouteRequest`) to determine the type of link (Webpage, PDF, Twitter, LinkedIn, Unsupported).
 *   **Web Search/Extraction:** Uses Tavily for standard webpage content extraction.
 *   **PDF Support:** Can process and summarize PDF documents found at URLs.
 *   **Twitter/X Support:** Fetches tweet content (including threads) using the `twitterapi.io` service.
-*   **LinkedIn Support:** Extracts content from LinkedIn post URLs using the `linkedin_scraper_tool` (which leverages Tavily search).
+*   **LinkedIn Support:** Extracts content from LinkedIn post URLs using Playwright and AgentQL.
 *   **Agentic Workflow:** Leverages LangGraph for a multi-step reasoning process.
 *   **BAML Integration:** Uses BAML for structured output generation (summaries and routing).
 *   **Telegram Bot Interface:** Interacts via a simple Telegram bot, replying silently on failure.
@@ -39,10 +34,10 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
 
 *   **Routing/Summarization:** BAML (Boundary) + LLM (e.g., Gemini, Deepseek)
 *   **Orchestration:** LangGraph
-*   **YouTube Extraction:** `requests`, `beautifulsoup4` (for primary description scraping), `yt-dlp`, `youtube-transcript-api`, `google-api-python-client` (YouTube Data API v3 is required to be enabled on GCP console)
+*   **YouTube Extraction:** `playwright`, `agentql`
 *   **Twitter/X API:** `twitterapi.io` via `requests`
 *   **Web Extraction:** Tavily Search SDK
-*   **LinkedIn Extraction:** Tavily Search SDK (via `linkedin_scraper_tool.py`)
+*   **LinkedIn Extraction:** `playwright`, `agentql`
 *   **PDF Extraction:** PyMuPDF (`fitz`)
 *   **Telegram Bot:** `python-telegram-bot`
 *   **Web Framework:** FastAPI + Uvicorn
@@ -65,6 +60,10 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
         # Or using pip
         pip install -e . # Install in editable mode
         ```
+    *   Install Playwright browsers:
+        ```bash
+        playwright install
+        ```
 
 3.  **Set up Environment Variables:**
     Create a file named `.env` in the project root directory. Add the following environment variables with your actual values:
@@ -73,11 +72,12 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
     # Select *one* LLM provider for BAML functions (or configure multi-provider
     # GEMINI_API_KEY="your_google_gemini_api_key" # For Google LLMs
     DEEPSEEK_API_KEY="your_deepseek_api_key" # For Deepseek LLMs
-    GOOGLE_API_KEY="your_google_cloud_api_key" # with YouTube Data API v3 enabled on GCP console for youtube extractor fallback
+    GOOGLE_API_KEY="your_google_cloud_api_key" # e.g., For Google LLMs or other Google Cloud services
 
     # Tools
     TAVILY_API_KEY="your_tavily_api_key"
     TWITTER_API_IO_KEY="your_twitterapi.io_api_key" # API Key for twitterapi.io service
+    AGENTQL_API_KEY="your_agentql_api_key" # API Key for AgentQL
 
     # --- Telegram Bot Configuration ---
     TELEGRAM_BOT_TOKEN="your_telegram_bot_token"

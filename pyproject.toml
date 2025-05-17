@@ -39,6 +39,8 @@ dependencies = [
     "google-api-python-client>=2.169.0",
     "google-cloud-secret-manager>=2.20.0", # Added for GCP Secret Manager access
     "bs4>=0.0.2",
+    "playwright>=1.52.0",
+    "agentql>=1.10.0",
 ]
 
 [tool.setuptools]

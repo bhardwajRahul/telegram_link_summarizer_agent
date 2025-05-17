@@ -16,13 +16,7 @@ class Summary {
 // Define the main summarization function
 // This function handles shorter texts directly or uses context for RAG-based summaries.
 function SummarizeContent(content: string, content_type: ContentType, context: string?) -> Summary {
-  // Specifies the client to use for the LLM call. Assumes an 'openai' client is configured in BAML settings.
-  // The model used (e.g., gpt-4-turbo-preview) is typically configured in the BAML client settings or passed via environment variables.
-  // client Gemini2_5_flash 
-  client DeepSeekV3
-  // client Gemini2_5_flash
-
-  // Prompt definition using BAML's syntax
+  client LLMFallback
   prompt #"
     You are an expert summarization engine. Your goal is to provide a clear and concise summary of the given text.
 
