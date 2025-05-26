@@ -4,10 +4,6 @@ FROM python:3.11-slim
 # Set the working directory in the container
 WORKDIR /app
 
-# Install essential system packages (if any are still needed beyond Python)
-# RUN apt-get update && apt-get install -y --no-install-recommends \
-#     && rm -rf /var/lib/apt/lists/*
-
 # Install uv
 RUN pip install --no-cache-dir uv
 
@@ -17,6 +13,9 @@ COPY . .
 # Install dependencies using uv from pyproject.toml
 # This avoids using the lock file directly which was causing issues
 RUN uv pip install --system . --no-cache-dir
+
+# Install Playwright
+RUN playwright install --with-deps chromium
 
 # Expose the port the app runs on (adjust if your app uses a different port)
 # Cloud Run automatically uses the port defined by the PORT env var (default 8080)

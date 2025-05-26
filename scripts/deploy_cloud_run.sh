@@ -126,6 +126,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --region="$REGION" \
   --port=8080 \
   --allow-unauthenticated \
+  --memory=1024Mi \
   --min-instances=1 \
   --cpu-throttling \
   $SECRETS_ARG \

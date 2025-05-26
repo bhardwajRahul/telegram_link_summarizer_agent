@@ -30,6 +30,13 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 load_dotenv()
 
 
+def block_resources(route):
+    if route.request.resource_type in ["image", "stylesheet", "font"]:
+        route.abort()
+    else:
+        route.continue_()
+
+
 def scrape_linkedin_post(url: str, headless: bool = True) -> dict[str, str]:
     """Return the post’s author name and full text content."""
 
@@ -37,11 +44,33 @@ def scrape_linkedin_post(url: str, headless: bool = True) -> dict[str, str]:
     agentql.configure(api_key=os.getenv("AGENTQL_API_KEY", ""))
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
+        browser = p.chromium.launch(
+            headless=headless,
+            args=["--no-sandbox"],
+        )
         page = agentql.wrap(browser.new_page())
 
         # 1. Navigate & wait for DOM ready
-        page.goto(url, wait_until="domcontentloaded")
+        try:
+            # Increased timeout to 60 seconds
+            page.route("**/*", block_resources)
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        except PlaywrightTimeoutError as e:
+            print(f"Timeout during page.goto: {e}")
+            try:
+                # Attempt to save a screenshot for debugging
+                screenshot_path = "linkedin_timeout_screenshot.png"
+                page.screenshot(path=screenshot_path)
+                print(f"Screenshot saved to {screenshot_path}")
+            except Exception as se:
+                print(f"Failed to save screenshot: {se}")
+            browser.close()  # Ensure browser is closed on error
+            raise  # Re-raise the original timeout error
+        except Exception as e:
+            print(f"An unexpected error occurred during page.goto: {e}")
+            browser.close()  # Ensure browser is closed on error
+            raise  # Re-raise the original error
+
         page.wait_for_page_ready_state()
 
         # 2. Accept cookies / privacy banner if shown (EU visitors)
@@ -61,7 +90,7 @@ def scrape_linkedin_post(url: str, headless: bool = True) -> dict[str, str]:
             except PlaywrightTimeoutError:
                 pass  # No banner
 
-        # 3. Expand “…see more” inside the post body (if truncated)
+        # 3. Expand "…see more" inside the post body (if truncated)
         try:
             more = page.query_elements(
                 """
