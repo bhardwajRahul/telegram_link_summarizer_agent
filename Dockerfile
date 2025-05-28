@@ -1,27 +1,15 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# # Dockerfile
+# --- 1. use Microsoft’s pre-built image (has Chromium + all libs)
+FROM mcr.microsoft.com/playwright/python:v1.51.0-noble
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Install uv
-RUN pip install --no-cache-dir uv
+# --- 2. install python deps & agentql
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install agentql
 
-# Copy the entire application code
+# --- 3. copy code & launch
 COPY . .
-
-# Install dependencies using uv from pyproject.toml
-# This avoids using the lock file directly which was causing issues
-RUN uv pip install --system . --no-cache-dir
-
-# Install Playwright
-RUN playwright install --with-deps chromium
-
-# Expose the port the app runs on (adjust if your app uses a different port)
-# Cloud Run automatically uses the port defined by the PORT env var (default 8080)
-EXPOSE 8080
-
-# Specify the command to run on container start using Uvicorn
-# Runs the FastAPI app defined as 'app' in the 'bot.py' module
-# Use bash -c to allow environment variable substitution for PORT, defaulting to 8080
-CMD bash -c 'uvicorn bot:app --host 0.0.0.0 --port ${PORT:-8080}'
+ENV PORT=8080 PYTHONUNBUFFERED=1
+CMD ["uvicorn", "bot:app", "--host", "0.0.0.0", "--port", "8080"]
