@@ -356,7 +356,6 @@ def get_youtube_content(state: AgentState) -> Dict[str, Any]:
         console.print(
             f"Unexpected error calling scrape_youtube_agentql for {url}: {e}",
             style="red bold",
-            exc_info=True,
         )
         error_message = f"Error: An unexpected error occurred while calling the YouTube AgentQL tool. {e}"
         content_result = ""

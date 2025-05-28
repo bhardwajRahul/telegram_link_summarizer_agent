@@ -1,6 +1,6 @@
 # # Dockerfile
 # --- 1. use Microsoft's pre-built image (has Chromium + all libs)
-FROM mcr.microsoft.com/playwright/python:v1.51.0-noble
+FROM mcr.microsoft.com/playwright/python:v1.52.0-noble
 
 WORKDIR /app
 
