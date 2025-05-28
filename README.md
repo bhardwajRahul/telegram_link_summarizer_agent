@@ -86,12 +86,38 @@ An agentic Telegram bot designed to summarize web links (articles, papers, tweet
     # For ngrok, use the https://<your-ngrok-subdomain>.ngrok-free.app URL
     # For deployment, this isn't strictly needed in the .env for the *deployed* app,
     # but the deployment script will set the webhook based on the Cloud Run URL.
-    WEBHOOK_URL="your_webhook_url_or_ngrok_url"
+    # WEBHOOK_URL="your_webhook_url_or_ngrok_url"
 
     # Secure your webhook (generate strong random strings for these)
     TELEGRAM_WEBHOOK_SECRET_TOKEN="your_strong_random_secret_token"
     # Example: /webhook/aBcDeF12345 - must start with a slash!
-    WEBHOOK_SECRET_PATH="/your_unique_and_random_webhook_path"
+    # WEBHOOK_SECRET_PATH="/your_unique_and_random_webhook_path"
+
+    # --- Polling vs Webhook Mode (for bot.py) ---
+    # Set USE_POLLING to "true" to run the bot in polling mode (recommended for self-managed servers without HTTPS).
+    # If USE_POLLING is "true", WEBHOOK_URL and related settings are ignored by bot.py.
+    # Defaults to webhook mode if not set or "false".
+    # USE_POLLING="true" 
+
+    # --- Webhook Configuration (Only if NOT using USE_POLLING="true") ---
+    # For local ngrok testing:
+    # WEBHOOK_URL="https://your-ngrok-subdomain.ngrok-free.app"
+    # WEBHOOK_SECRET_PATH="your_unique_and_random_webhook_path" # e.g., webhook_abc123 (no leading slash for bot.py)
+    
+    # For self-managed server with public IP (HTTP, for testing - Telegram prefers HTTPS for production):
+    # WEBHOOK_URL="http://YOUR_SERVER_IP:8080"
+    # WEBHOOK_SECRET_PATH="your_unique_and_random_webhook_path" # e.g., webhook_abc123 (no leading slash for bot.py)
+
+    # For self-managed server with domain and HTTPS (Production Webhook):
+    # WEBHOOK_URL="https://yourbot.yourdomain.com" # Nginx would proxy to http://localhost:8080
+    # WEBHOOK_SECRET_PATH="your_unique_and_random_webhook_path" # e.g., webhook_abc123 (no leading slash for bot.py)
+    
+    # For Google Cloud Run (this is typically set by the deploy_cloud_run.sh script, not manually in .env):
+    # WEBHOOK_URL="your_cloud_run_service_url" 
+    # WEBHOOK_SECRET_PATH="your_unique_and_random_webhook_path" # e.g., webhook_abc123 (no leading slash for bot.py)
+
+    # Secure your webhook (generate strong random strings for these) - ALWAYS NEEDED FOR WEBHOOK MODE
+    # TELEGRAM_WEBHOOK_SECRET_TOKEN="your_strong_random_secret_token"
     ```
     **Important:** 
     *   Get your `TWITTER_API_IO_KEY` from [twitterapi.io](https://twitterapi.io/).
@@ -232,6 +258,114 @@ You can also test the Docker container with ngrok to receive real Telegram messa
     This ensures the container picks up the new `WEBHOOK_URL` from the `.env` file.
 
 5.  **Test:** Send messages to your bot. They should be routed through ngrok to your running Docker container.
+
+## Deploying to a Self-Managed Server/VM (Docker)
+
+This method uses Docker and the provided `scripts/deploy_server.sh` script to deploy the bot to your own virtual machine or dedicated server. This is the recommended approach for self-hosting.
+
+### 1. Server Preparation
+
+SSH into your server and ensure `git` and `docker` are installed.
+
+```bash
+# Update system (example for Debian/Ubuntu)
+sudo apt update && sudo apt upgrade -y
+
+# Install Git
+sudo apt install -y git
+
+# Install Docker
+sudo apt install -y docker.io
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Optional: Add your user to the docker group to run docker commands without sudo
+# sudo usermod -aG docker $USER
+# newgrp docker # Or log out and log back in
+```
+
+### 2. Clone Repository
+
+Clone your repository onto the server:
+```bash
+git clone <your-repo-url>
+cd telegram_link_summarizer_agent
+```
+
+### 3. Configure Environment (`.env` file)
+
+Create a `.env` file in the project root on your server.
+
+**Option A: Polling Mode (Recommended for Simplicity)**
+This is the easiest way to get started on a self-managed server as it doesn't require a public domain, SSL, or complex firewall/proxy setup beyond allowing outbound connections.
+
+```env
+# In your .env file on the server:
+USE_POLLING="true"
+
+# --- Core API Keys ---
+DEEPSEEK_API_KEY="your_deepseek_api_key"
+# GEMINI_API_KEY="your_google_gemini_api_key"
+TAVILY_API_KEY="your_tavily_api_key"
+TWITTER_API_IO_KEY="your_twitterapi.io_api_key"
+AGENTQL_API_KEY="your_agentql_api_key"
+
+# --- Telegram Bot Configuration ---
+TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
+
+# --- Webhook related variables can be omitted or commented out when USE_POLLING="true" ---
+# WEBHOOK_URL=
+# WEBHOOK_SECRET_PATH=
+# TELEGRAM_WEBHOOK_SECRET_TOKEN=
+```
+
+**Option B: Webhook Mode**
+If you prefer webhook mode, you'll need a way for Telegram to reach your bot.
+
+*   **Using Server IP (HTTP - for testing only, Telegram prefers HTTPS):**
+    ```env
+    # .env on server
+    USE_POLLING="false" # Or omit
+    WEBHOOK_URL="http://YOUR_SERVER_PUBLIC_IP:8080"
+    WEBHOOK_SECRET_PATH="your_random_webhook_path_string" # e.g., webhook_bot123 (NO leading slash here)
+    TELEGRAM_WEBHOOK_SECRET_TOKEN="your_strong_random_token"
+    # ... other API keys ...
+    ```
+    You'll also need to ensure your server's firewall allows inbound traffic on port `8080`.
+    ```bash
+    sudo ufw allow 8080/tcp
+    ```
+
+*   **Using a Domain Name (HTTPS - Recommended for Production Webhooks):**
+    This involves setting up a domain name pointing to your server, using a reverse proxy like Nginx, and obtaining an SSL certificate (e.g., with Let's Encrypt).
+    ```env
+    # .env on server
+    USE_POLLING="false" # Or omit
+    WEBHOOK_URL="https://yourbot.yourdomain.com" # Nginx will handle HTTPS and proxy to the bot
+    WEBHOOK_SECRET_PATH="your_random_webhook_path_string"
+    TELEGRAM_WEBHOOK_SECRET_TOKEN="your_strong_random_token"
+    # ... other API keys ...
+    ```
+    Your Nginx would be configured to listen on port 443 (HTTPS), terminate SSL, and proxy requests for your `WEBHOOK_SECRET_PATH` to `http://localhost:8080`. Firewall should allow port 443.
+
+### 4. Run Deployment Script
+
+The `deploy_server.sh` script will build the Docker image and start the container.
+```bash
+chmod +x ./scripts/deploy_server.sh
+./scripts/deploy_server.sh
+```
+The script uses port `8080` by default.
+
+### 5. Monitoring
+
+*   **View logs:** `docker logs -f telegram-summarizer`
+*   **Check status:** `docker ps`
+*   **Stop:** `docker stop telegram-summarizer`
+*   **Start:** `docker start telegram-summarizer`
+*   **Restart:** `docker restart telegram-summarizer`
+
+If using polling mode, the bot should start processing messages. If using webhook mode, ensure your webhook is correctly set with Telegram (the `deploy_server.sh` script attempts this if it finds webhook variables in `.env`, but `bot.py` also tries on startup).
 
 ## Deploying to Google Cloud Run
 
