@@ -168,37 +168,24 @@ async def lifespan(app: FastAPI):
     logger.info("Application startup...")
     global ptb_app  # Make sure we're modifying the global instance
 
-    # Check if we should run in polling mode
-    # This needs to be checked early, before webhook or polling setup.
     should_use_polling = os.getenv("USE_POLLING", "false").lower() == "true"
 
-    # Initialize the application first
     logger.info("Initializing PTB application...")
     await ptb_app.initialize()
-
-    # Add handlers
     url_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message)
     ptb_app.add_handler(url_handler)
+    await ptb_app.start()  # Start application components (like scheduler, etc.)
 
+    polling_task = None
     if should_use_polling:
-        logger.info("Polling mode is active. Skipping webhook setup.")
-        # For polling, PTB's run_polling() is typically called directly,
-        # not within the FastAPI lifespan for Uvicorn.
-        # However, if Uvicorn *is* used with polling, we ensure PTB is ready.
-        # The actual polling loop will be started by the __main__ block if not using Uvicorn.
-        # If using Uvicorn AND polling, the bot won't automatically start polling updates
-        # unless we explicitly start a background task for it here.
-        # For now, we assume if Uvicorn is running, webhook is preferred or manual polling start.
-        # Let's log a warning if Uvicorn is running with polling enabled.
-        if not os.getenv("_SUPERVISOR_USE_POLLING_MODE"):  # Flag to be set in __main__
-            logger.warning(
-                "Running with Uvicorn and USE_POLLING=true. "
-                + "Polling will not start automatically by FastAPI. "
-                + "Ensure polling is started by the main script execution if desired."
-            )
-        # We still need to start the application for handlers to be registered
-        await ptb_app.start()  # Start the application components
-        # await ptb_app.updater.start_polling() # This would start polling if needed here
+        logger.info(
+            "Polling mode is active. Starting PTB polling loop in background..."
+        )
+        # Start polling in a background task so it doesn't block Uvicorn
+        polling_task = asyncio.create_task(
+            ptb_app.updater.start_polling(poll_interval=1.0)
+        )
+        logger.info("PTB polling loop started.")
 
     elif WEBHOOK_URL:  # Webhook mode
         full_webhook_url = (
@@ -206,32 +193,21 @@ async def lifespan(app: FastAPI):
         )
         logger.info(f"Setting webhook to: {full_webhook_url}")
         try:
-            # The ptb_app.start() call below implicitly handles webhook registration
-            # when a webhook URL is configured and it's not polling.
-            # It calls `bot.set_webhook` internally.
-            await ptb_app.start()
-            # To be absolutely sure the webhook is set with parameters:
-            # await ptb_app.bot.set_webhook(
-            #     url=full_webhook_url,
-            #     secret_token=os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN"),
-            #     allowed_updates=Update.ALL_TYPES,
-            # )
-            logger.info("Webhook setup initiated by ptb_app.start().")
-        except Exception as e:
-            logger.error(
-                f"Failed to set webhook via ptb_app.start(): {e}", exc_info=True
+            # ptb_app.start() should have registered the webhook if configured
+            # Forcing it here to be sure, especially if start() behavior changes
+            await ptb_app.bot.set_webhook(
+                url=full_webhook_url,
+                secret_token=os.getenv("TELEGRAM_WEBHOOK_SECRET_TOKEN"),
+                allowed_updates=Update.ALL_TYPES,
             )
-            # Decide if you want to exit or continue without webhook
-            # exit()
+            logger.info("Webhook explicitly set successfully.")
+        except Exception as e:
+            logger.error(f"Failed to set webhook: {e}", exc_info=True)
     else:  # No polling and no WEBHOOK_URL
         logger.warning(
-            "USE_POLLING is false and WEBHOOK_URL not set. "
-            + "Bot will not receive updates via webhook or polling."
+            "USE_POLLING is false and WEBHOOK_URL not set. Bot may not receive updates."
         )
-        # Still start the application for other potential uses (e.g. health checks)
-        await ptb_app.start()
 
-    # Create a flag to indicate the bot is initialized
     app.state.bot_initialized = True
     logger.info("Bot initialization complete.")
 
@@ -239,20 +215,34 @@ async def lifespan(app: FastAPI):
 
     # --- Shutdown ---
     logger.info("Application shutdown...")
-    # Stop PTB application regardless of mode
     try:
-        if should_use_polling:
-            logger.info("Polling mode: Stopping PTB application...")
-            # If polling was started by ptb_app.updater.start_polling()
-            # await ptb_app.updater.stop()
-        elif WEBHOOK_URL:
+        if polling_task and not polling_task.done():
+            logger.info("Polling mode: Stopping PTB polling loop...")
+            ptb_app.updater.stop()  # Request stop
+            try:
+                await asyncio.wait_for(
+                    polling_task, timeout=5.0
+                )  # Wait for task to finish
+            except asyncio.TimeoutError:
+                logger.warning("Polling task did not finish in time, cancelling.")
+                polling_task.cancel()
+            except Exception as e:
+                logger.error(f"Error stopping polling task: {e}")
+            logger.info("PTB polling loop stopped.")
+        elif (
+            WEBHOOK_URL and not should_use_polling
+        ):  # only delete webhook if it was set
             logger.info("Webhook mode: Attempting to delete webhook...")
-            await ptb_app.bot.delete_webhook()
-            logger.info("Webhook deleted successfully.")
+            try:
+                await ptb_app.bot.delete_webhook(drop_pending_updates=True)
+                logger.info("Webhook deleted successfully.")
+            except Exception as e:
+                logger.error(f"Failed to delete webhook: {e}", exc_info=True)
 
-        await ptb_app.stop()
+        if ptb_app.running:
+            await ptb_app.stop()
         await ptb_app.shutdown()
-        logger.info("PTB Application stopped and shut down.")
+        logger.info("PTB Application components stopped and shut down.")
     except Exception as e:
         logger.error(f"Error during PTB application shutdown: {e}", exc_info=True)
 
@@ -342,53 +332,42 @@ if __name__ == "__main__":
 
     if use_polling:
         logger.info("Starting bot in polling mode (from __main__)...")
-        # We need to initialize and add handlers if not done by FastAPI's lifespan
-        # However, Application.builder().token() already creates ptb_app.
-        # Ensure handlers are added before run_polling.
+        # This block is mainly for running `python bot.py` directly.
+        # When running with Uvicorn, the lifespan handler above manages polling.
 
-        # Temporarily set an environment variable to signal lifespan not to warn
+        # Set a flag that lifespan can check if needed, though direct call is better.
         os.environ["_SUPERVISOR_USE_POLLING_MODE"] = "1"
 
-        # Initialize PTB application, add handlers, and start components
-        # This logic is now partly in lifespan, but run_polling needs a fully set up app.
-        # The lifespan function will run if Uvicorn is *also* started, but for direct polling,
-        # we need to ensure ptb_app is ready.
-
-        async def main_polling():
+        async def main_polling_directly():
             global ptb_app
-            logger.info("Initializing PTB application for direct polling...")
+            logger.info(
+                "Initializing PTB application for direct polling (main_polling_directly)..."
+            )
             await ptb_app.initialize()
             url_handler = MessageHandler(
                 filters.TEXT & (~filters.COMMAND), handle_message
             )
             ptb_app.add_handler(url_handler)
-            await ptb_app.start()  # Start application components
-            logger.info("Starting PTB polling loop...")
-            await ptb_app.updater.start_polling(poll_interval=1.0)  # Start polling
-            # Keep the event loop running for polling
-            while True:
-                await asyncio.sleep(3600)  # Keep alive, or use a more robust way
-
-        try:
-            asyncio.run(main_polling())
-        except KeyboardInterrupt:
-            logger.info("Polling stopped by user.")
-        finally:
-            # Cleanup if main_polling exits
-            async def shutdown_polling():
-                global ptb_app
-                if ptb_app and ptb_app.updater.running:  # Check if updater is running
-                    await ptb_app.updater.stop()
-                if ptb_app and ptb_app.running:  # Check if app itself is running
+            await ptb_app.start()
+            logger.info("Starting PTB polling loop (main_polling_directly)...")
+            try:
+                await ptb_app.updater.start_polling(poll_interval=1.0)
+                while True:  # Keep alive
+                    await asyncio.sleep(3600)
+            except KeyboardInterrupt:
+                logger.info("Polling stopped by user (main_polling_directly).")
+            finally:
+                logger.info("Shutting down PTB from main_polling_directly...")
+                if ptb_app.updater.running:
+                    ptb_app.updater.stop()  # stop() is not awaitable here
+                if ptb_app.running:
                     await ptb_app.stop()
-                if ptb_app:  # Ensure shutdown is called if app was initialized
-                    await ptb_app.shutdown()
-                logger.info("PTB application shut down after polling.")
+                await ptb_app.shutdown()
+                logger.info("PTB application shut down after direct polling.")
 
-            asyncio.run(shutdown_polling())
-            if "_SUPERVISOR_USE_POLLING_MODE" in os.environ:
-                del os.environ["_SUPERVISOR_USE_POLLING_MODE"]
-
+        asyncio.run(main_polling_directly())
+        if "_SUPERVISOR_USE_POLLING_MODE" in os.environ:
+            del os.environ["_SUPERVISOR_USE_POLLING_MODE"]
     else:
         # Run in webhook mode with FastAPI/Uvicorn
         logger.info(f"Starting Uvicorn server on {host}:{port} for webhook mode...")
